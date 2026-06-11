@@ -13,11 +13,11 @@ GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
 ALLOW_DEV_AUTH_HEADERS: bool = os.getenv("ALLOW_DEV_AUTH_HEADERS") == "true"
 AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
 
-# Bedrock model id (cross-region inference profile) for answer generation.
-# Defaults to Claude Haiku 4.5 — cheap and current; override with RAG_MODEL_ID.
-RAG_MODEL_ID: str = os.getenv(
-    "RAG_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-)
+# Bedrock model id (cross-region inference profile) for answer generation, used
+# via the model-agnostic Converse API. Defaults to Amazon Nova Lite — one of the
+# cheapest Bedrock models and not behind the Anthropic access gate. Swap to a
+# Claude profile (e.g. us.anthropic.claude-haiku-4-5-20251001-v1:0) via env.
+RAG_MODEL_ID: str = os.getenv("RAG_MODEL_ID", "us.amazon.nova-2-lite-v1:0")
 
 # Bedrock embedding model. Titan Text Embeddings v2 outputs 1024-dim vectors;
 # EMBED_DIM must match the VECTOR(n) column declared in memory/db.py.

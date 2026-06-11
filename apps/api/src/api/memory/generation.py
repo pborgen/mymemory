@@ -1,4 +1,4 @@
-"""Generation — Claude on AWS Bedrock for routing and answering.
+"""Generation — Bedrock Converse API for routing and answering.
 
 Two LLM calls live here:
   - classify_and_normalize(message): decide whether the message is a fact to
@@ -7,33 +7,34 @@ Two LLM calls live here:
   - generate_answer(query, memories, history): answer a question grounded ONLY
     in the user's retrieved memories.
 
-Uses the anthropic SDK's AnthropicBedrock client; credentials resolve via the
-standard AWS chain.
+Uses the Bedrock **Converse** API via boto3, which is model-agnostic: the same
+code works for Amazon Nova (cheap, the default) and Anthropic Claude — switch by
+changing RAG_MODEL_ID. Credentials resolve via the standard AWS chain.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 
-from anthropic import AnthropicBedrock
+import boto3
 
 from .. import config
 
-_client = AnthropicBedrock(aws_region=config.AWS_REGION)
+_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
 MODEL_ID = config.RAG_MODEL_ID
 
 _ROUTER_SYSTEM = """You route messages for a personal memory assistant. The user \
 either tells you a fact to remember about their life, or asks a question to \
 recall something they told you earlier.
 
-Respond with ONLY a JSON object, no prose, in this exact shape:
+Respond with ONLY a JSON object, no prose, no markdown fences, in this exact shape:
 {"action": "store" | "recall", "fact": "<string>"}
 
 Rules:
 - "store" — the message states information to remember (e.g. "my car plate is \
 8XYZ123", "Jenna's birthday is March 3"). Set "fact" to a clean, self-contained \
-third-person-or-first-person statement capturing the information, expanding \
-pronouns and context so it stands alone. Keep the user's own values verbatim.
+statement capturing the information, expanding pronouns and context so it stands \
+alone. Keep the user's own values verbatim.
 - "recall" — the message asks for information or is a question (e.g. "what's my \
 license plate?", "when is Jenna's birthday?"). Set "fact" to "".
 - If ambiguous, prefer "recall" only when it is clearly a question; otherwise "store"."""
@@ -50,17 +51,30 @@ and briefly suggest they tell you so you can remember it.
 - Do not mention "memories", "context", or "documents" in your wording; just answer naturally."""
 
 
-def _classify_sync(message: str) -> dict:
-    response = _client.messages.create(
-        model=MODEL_ID,
-        max_tokens=400,
-        system=_ROUTER_SYSTEM,
-        messages=[{"role": "user", "content": message}],
+def _converse(system: str, messages: list[dict], max_tokens: int, temperature: float) -> str:
+    """One Bedrock Converse round-trip; returns the assistant's text."""
+    response = _client.converse(
+        modelId=MODEL_ID,
+        system=[{"text": system}],
+        messages=messages,
+        inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
     )
-    first = response.content[0]
-    text = first.text if getattr(first, "type", None) == "text" else ""
+    parts = response["output"]["message"]["content"]
+    return "".join(p.get("text", "") for p in parts).strip()
+
+
+def _classify_sync(message: str) -> dict:
+    text = _converse(
+        _ROUTER_SYSTEM,
+        [{"role": "user", "content": [{"text": message}]}],
+        max_tokens=400,
+        temperature=0.0,
+    )
+    # Models occasionally wrap JSON in ```json fences; strip them.
+    if text.startswith("```"):
+        text = text.strip("`").lstrip("json").strip()
     try:
-        data = json.loads(text.strip())
+        data = json.loads(text)
         action = data.get("action")
         if action not in ("store", "recall"):
             raise ValueError("bad action")
@@ -82,28 +96,26 @@ def _answer_sync(query: str, memories: list[dict], history: list[dict]) -> dict:
         for m in memories
     ) or "(no saved memories matched this question)"
 
-    messages = [{"role": m["role"], "content": m["content"]} for m in history]
+    messages = [
+        {"role": m["role"], "content": [{"text": m["content"]}]} for m in history
+    ]
     messages.append(
         {
             "role": "user",
-            "content": (
-                "Here are the user's saved memories that may be relevant:\n\n"
-                f"{context_block}\n\n"
-                "---\n\n"
-                f"Answer this question using only the memories above:\n{query}"
-            ),
+            "content": [
+                {
+                    "text": (
+                        "Here are the user's saved memories that may be relevant:\n\n"
+                        f"{context_block}\n\n"
+                        "---\n\n"
+                        f"Answer this question using only the memories above:\n{query}"
+                    )
+                }
+            ],
         }
     )
 
-    response = _client.messages.create(
-        model=MODEL_ID,
-        max_tokens=1024,
-        system=_ANSWER_SYSTEM,
-        messages=messages,
-    )
-    first = response.content[0]
-    answer = first.text if getattr(first, "type", None) == "text" else ""
-
+    answer = _converse(_ANSWER_SYSTEM, messages, max_tokens=1024, temperature=0.2)
     sources = [
         {"id": m["id"], "content": m["content"], "similarity": m["similarity"]}
         for m in memories

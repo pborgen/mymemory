@@ -37,7 +37,9 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  const { listening, start, stop } = useVoice((text) => setInput(text));
+  const { available: voiceAvailable, listening, start, stop } = useVoice((text) =>
+    setInput(text),
+  );
 
   const mutation = useMutation({
     mutationFn: (message: string) => sendMemoryChat(message, sessionId.current),
@@ -145,21 +147,23 @@ export default function Chat() {
             borderTopWidth: 1,
           }}
         >
-          <Pressable
-            onPress={listening ? stop : start}
-            style={{
-              width: 46,
-              height: 46,
-              borderRadius: 23,
-              backgroundColor: listening ? theme.accent : theme.surface,
-              borderColor: theme.border,
-              borderWidth: 1,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 20 }}>{listening ? "⏹" : "🎙"}</Text>
-          </Pressable>
+          {voiceAvailable && (
+            <Pressable
+              onPress={listening ? stop : start}
+              style={{
+                width: 46,
+                height: 46,
+                borderRadius: 23,
+                backgroundColor: listening ? theme.accent : theme.surface,
+                borderColor: theme.border,
+                borderWidth: 1,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 20 }}>{listening ? "⏹" : "🎙"}</Text>
+            </Pressable>
+          )}
 
           <TextInput
             value={input}
