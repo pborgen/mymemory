@@ -1,0 +1,14 @@
+{
+  "name": "mymemory-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/mobile"
+  ],
+  "scripts": {
+    "mobile:dev": "npm --workspace apps/mobile run start",
+    "api:dev": "cd apps/api && uv run uvicorn api.main:app --reload --port 8080",
+    "api:start": "cd apps/api && uv run api",
+    "agent:memory": "cd apps/agent && uv run memory"
+  }
+}

@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+aws_region = "us-east-1"
+app_name   = "mymemory"
+
+# Generation (Claude) + embeddings (Titan) both run on AWS Bedrock via the App
+# Runner instance role — no API keys needed. Make sure Bedrock model access is
+# enabled in this region (Bedrock console → Model access) for BOTH:
+#   - the Anthropic Claude model in rag_model_id
+#   - Amazon Titan Text Embeddings v2 (amazon.titan-embed-text-v2:0)
+
+# GitHub repo allowed to assume the keyless deploy role (owner/name).
+github_repo = "pborgen/mymemory"
+
+# If your account already has the GitHub OIDC provider (from another project),
+# set this to false to look it up instead of creating a duplicate.
+# create_github_oidc_provider = true
+
+# Optional: set to enable Google OAuth login
+google_client_id = ""
+
+# Leave blank to auto-generate a strong DB password (recommended)
+db_password = ""

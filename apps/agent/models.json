@@ -1,0 +1,38 @@
+{
+  "active": "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+  "providers": {
+    "bedrock": {
+      "region_env": "AWS_REGION",
+      "region_default": "us-east-1",
+      "models": [
+        "us.anthropic.claude-opus-4-8",
+        "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      ]
+    },
+    "anthropic": {
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "models": [
+        "claude-opus-4-7",
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "groq": {
+      "api_key_env": "GROQ_API_KEY",
+      "models": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
+      ]
+    },
+    "ollama": {
+      "base_url_env": "OLLAMA_BASE_URL",
+      "base_url_default": "http://localhost:11434",
+      "models": [
+        "llama3.2",
+        "llama3.1",
+        "qwen2.5"
+      ]
+    }
+  }
+}
