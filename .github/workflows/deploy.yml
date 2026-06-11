@@ -1,0 +1,74 @@
+name: Deploy
+
+# Build the API image and push it to ECR. App Runner has
+# auto_deployments_enabled, so a new :latest image triggers a redeploy; we also
+# issue an explicit StartDeployment as a belt-and-suspenders nudge.
+#
+# Requires (created by `infra/` terraform, then set in repo settings):
+#   Variables: AWS_DEPLOY_ROLE_ARN, AWS_REGION, ECR_REPOSITORY
+# Auth is keyless via GitHub OIDC — no stored AWS keys.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # required for OIDC role assumption
+  contents: read
+
+jobs:
+  deploy:
+    name: build + push to ECR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 \
+            -f apps/api/Dockerfile \
+            -t "$REGISTRY/$REPOSITORY:$IMAGE_TAG" \
+            -t "$REGISTRY/$REPOSITORY:latest" \
+            .
+          docker push "$REGISTRY/$REPOSITORY:$IMAGE_TAG"
+          docker push "$REGISTRY/$REPOSITORY:latest"
+
+      - name: Trigger App Runner deployment
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          SERVICE_NAME: ${{ vars.ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          ARN=$(aws apprunner list-services --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn | [0]" \
+            --output text)
+          if [ "$ARN" = "None" ] || [ -z "$ARN" ]; then
+            echo "App Runner service '${SERVICE_NAME}' not found; skipping explicit deploy."
+            echo "(auto_deployments_enabled will redeploy from the new :latest image.)"
+            exit 0
+          fi
+          echo "Starting deployment for $ARN"
+          aws apprunner start-deployment --region "$AWS_REGION" --service-arn "$ARN"
