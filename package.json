@@ -3,10 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "apps/mobile"
+    "apps/mobile",
+    "apps/web"
   ],
   "scripts": {
     "mobile:dev": "npm --workspace apps/mobile run start",
+    "web:dev": "npm --workspace apps/web run dev",
+    "web:build": "npm --workspace apps/web run build",
     "api:dev": "cd apps/api && uv run uvicorn api.main:app --reload --port 8080",
     "api:start": "cd apps/api && uv run api",
     "agent:memory": "cd apps/agent && uv run memory"

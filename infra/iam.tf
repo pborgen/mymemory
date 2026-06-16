@@ -48,11 +48,13 @@ resource "aws_iam_role_policy" "apprunner_secrets" {
   policy = data.aws_iam_policy_document.apprunner_secrets.json
 }
 
-# ── Bedrock: invoke Claude (generation) AND Titan (embeddings) ──
-# Generation uses a cross-region inference profile (us.anthropic.*), which routes
-# to the underlying Anthropic foundation models across us-* regions — so both the
-# foundation-model and inference-profile ARNs must be allowed. Titan embeddings
-# (amazon.titan-embed-*) are invoked directly as a foundation model.
+# ── Bedrock: invoke the generation + embedding models ──
+# Generation uses a cross-region inference profile (e.g. us.amazon.nova-* or
+# us.anthropic.claude-*), which routes to the underlying foundation models across
+# us-* regions — so BOTH the foundation-model and inference-profile ARNs must be
+# allowed. Embeddings use Amazon Titan. We allow all Amazon foundation models
+# (covers Nova generation + Titan embeddings) plus Anthropic, plus any inference
+# profile in this account.
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "apprunner_bedrock" {
@@ -62,8 +64,8 @@ data "aws_iam_policy_document" "apprunner_bedrock" {
       "bedrock:InvokeModelWithResponseStream",
     ]
     resources = [
+      "arn:aws:bedrock:*::foundation-model/amazon.*",
       "arn:aws:bedrock:*::foundation-model/anthropic.*",
-      "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-*",
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
     ]
   }
