@@ -58,7 +58,13 @@ resource "aws_apprunner_service" "main" {
   }
 
   depends_on = [
+    # Without these explicit deps, a targeted apply of just this service can
+    # create the roles but skip their policies — App Runner then fails to pull
+    # the image ("Invalid Access Role") or to read secrets / call Bedrock.
+    aws_iam_role_policy_attachment.apprunner_ecr,
     aws_iam_role_policy.apprunner_secrets,
+    aws_iam_role_policy.apprunner_bedrock,
+    aws_secretsmanager_secret_version.postgres_url,
     aws_db_instance.main,
   ]
 }
