@@ -23,7 +23,7 @@ variable "image_tag" {
 variable "rag_model_id" {
   description = "Bedrock model id (inference profile) for answer generation"
   type        = string
-  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  default     = "us.amazon.nova-2-lite-v1:0"
 }
 
 variable "embed_model_id" {

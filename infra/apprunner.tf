@@ -65,6 +65,7 @@ resource "aws_apprunner_service" "main" {
     aws_iam_role_policy.apprunner_secrets,
     aws_iam_role_policy.apprunner_bedrock,
     aws_secretsmanager_secret_version.postgres_url,
+    aws_vpc_endpoint.bedrock_runtime,
     aws_db_instance.main,
   ]
 }
