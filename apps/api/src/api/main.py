@@ -14,7 +14,8 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from . import config, db
 from .memory.db import ensure_memory_tables
-from .routers import auth, memory
+from .prompts.db import ensure_prompt_tables, seed_prompts
+from .routers import auth, memory, prompts
 
 
 @asynccontextmanager
@@ -22,6 +23,8 @@ async def lifespan(app: FastAPI):
     await db.init_pool()
     await db.ensure_tables()
     await ensure_memory_tables()
+    await ensure_prompt_tables()
+    await seed_prompts()
     print(f"MyMemory API ready (port {config.PORT})")
     yield
     await db.close_pool()
@@ -55,7 +58,7 @@ async def unhandled_exception_handler(_: Request, exc: Exception):
 
 # ── API routers ───────────────────────────────────────────
 
-for module in (auth, memory):
+for module in (auth, memory, prompts):
     app.include_router(module.router)
 
 

@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 memory = "agents.memory.cli:main"
+orchestrator = "agents.orchestrator.cli:main"
 
 [build-system]
 requires = ["hatchling"]

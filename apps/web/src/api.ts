@@ -1,7 +1,14 @@
 // Browser API client for the MyMemory FastAPI backend. Mirrors
 // apps/mobile/src/api.ts, but persists auth in localStorage instead of
 // expo-secure-store. Safe to import from client components only.
-import type { AuthState, ChatResponse, DevAccount, Memory } from "./types";
+import type {
+  AuthState,
+  ChatResponse,
+  DevAccount,
+  Memory,
+  Prompt,
+  PromptVersion,
+} from "./types";
 
 export const AUTH_KEY = "mymemory_auth_v1";
 
@@ -81,3 +88,16 @@ export const createMemory = (content: string) =>
   apiFetch<{ ok: boolean; memory: Memory }>("POST", "/api/memory", { content });
 export const deleteMemory = (id: string) =>
   apiFetch<{ ok: boolean }>("DELETE", `/api/memory/${id}`);
+
+// Managed prompts
+export const fetchPrompts = () => apiFetch<Prompt[]>("GET", "/api/prompts");
+export const fetchPrompt = (key: string) =>
+  apiFetch<Prompt>("GET", `/api/prompts/${key}`);
+export const fetchPromptVersions = (key: string) =>
+  apiFetch<PromptVersion[]>("GET", `/api/prompts/${key}/versions`);
+export const savePrompt = (key: string, content: string) =>
+  apiFetch<Prompt>("PUT", `/api/prompts/${key}`, { content });
+export const rollbackPrompt = (key: string, versionId: string) =>
+  apiFetch<Prompt>("POST", `/api/prompts/${key}/rollback`, { versionId });
+export const resetPrompt = (key: string) =>
+  apiFetch<Prompt>("POST", `/api/prompts/${key}/reset`);

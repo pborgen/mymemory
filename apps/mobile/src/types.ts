@@ -30,6 +30,25 @@ export interface Memory {
   createdAt: string;
 }
 
+export interface Prompt {
+  key: string;
+  name: string;
+  description: string;
+  variables: string[];
+  content: string;
+  activeVersion: number | null;
+  updatedAt: string;
+}
+
+export interface PromptVersion {
+  id: string;
+  version: number;
+  content: string;
+  createdAt: string;
+  createdBy: string;
+  isActive: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";

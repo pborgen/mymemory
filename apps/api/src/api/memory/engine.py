@@ -11,6 +11,7 @@ from . import db
 from .embeddings import embed
 from .generation import classify_and_normalize, generate_answer
 from .retrieval import retrieve_relevant_memories
+from ..prompts import store as prompt_store
 
 
 async def store_fact(email: str, fact: str, source: str = "chat") -> dict:
@@ -28,7 +29,8 @@ async def handle_message(
         for m in await db.get_chat_history(email, session_id)
     ]
 
-    route = await classify_and_normalize(message)
+    classifier_prompt = await prompt_store.get_active("memory.classifier")
+    route = await classify_and_normalize(message, classifier_prompt)
 
     if route["action"] == "store" and route["fact"]:
         stored = await store_fact(email, route["fact"], source)
@@ -36,7 +38,8 @@ async def handle_message(
         action, sources = "stored", []
     else:
         memories = await retrieve_relevant_memories(email, message, top_k=6)
-        result = await generate_answer(message, memories, history)
+        answer_prompt = await prompt_store.get_active("memory.answer")
+        result = await generate_answer(message, memories, history, answer_prompt)
         answer, sources = result["answer"], result["sources"]
         action = "recalled"
 

@@ -54,11 +54,18 @@ export default function Memories() {
         <Text style={{ color: theme.text, fontSize: 20, fontWeight: "700" }}>
           Your memories
         </Text>
-        <Link href="/chat" asChild>
-          <Pressable hitSlop={8}>
-            <Text style={{ color: theme.accent, fontSize: 15 }}>Chat ›</Text>
-          </Pressable>
-        </Link>
+        <View style={{ flexDirection: "row", gap: 16 }}>
+          <Link href="/prompts" asChild>
+            <Pressable hitSlop={8}>
+              <Text style={{ color: theme.accent, fontSize: 15 }}>Prompts</Text>
+            </Pressable>
+          </Link>
+          <Link href="/chat" asChild>
+            <Pressable hitSlop={8}>
+              <Text style={{ color: theme.accent, fontSize: 15 }}>Chat ›</Text>
+            </Pressable>
+          </Link>
+        </View>
       </View>
 
       {isLoading ? (

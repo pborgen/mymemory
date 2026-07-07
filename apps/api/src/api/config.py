@@ -11,6 +11,12 @@ POSTGRES_URL: str | None = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL"
 PORT: int = int(os.getenv("PORT", "8080"))
 GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
 ALLOW_DEV_AUTH_HEADERS: bool = os.getenv("ALLOW_DEV_AUTH_HEADERS") == "true"
+
+# Emails allowed to edit managed prompts (comma-separated). When empty and dev
+# auth headers are enabled, any authenticated user may edit (local development).
+ADMIN_EMAILS: list[str] = [
+    e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
+]
 AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
 
 # Bedrock model id (cross-region inference profile) for answer generation, used

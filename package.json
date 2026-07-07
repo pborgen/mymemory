@@ -12,6 +12,7 @@
     "web:build": "npm --workspace apps/web run build",
     "api:dev": "cd apps/api && uv run uvicorn api.main:app --reload --port 8080",
     "api:start": "cd apps/api && uv run api",
-    "agent:memory": "cd apps/agent && uv run memory"
+    "agent:memory": "cd apps/agent && uv run memory",
+    "agent:orchestrator": "cd apps/agent && uv run orchestrator"
   }
 }

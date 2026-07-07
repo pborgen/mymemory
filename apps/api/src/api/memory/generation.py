@@ -63,9 +63,9 @@ def _converse(system: str, messages: list[dict], max_tokens: int, temperature: f
     return "".join(p.get("text", "") for p in parts).strip()
 
 
-def _classify_sync(message: str) -> dict:
+def _classify_sync(message: str, system: str) -> dict:
     text = _converse(
-        _ROUTER_SYSTEM,
+        system,
         [{"role": "user", "content": [{"text": message}]}],
         max_tokens=400,
         temperature=0.0,
@@ -84,11 +84,11 @@ def _classify_sync(message: str) -> dict:
         return {"action": "recall", "fact": ""}
 
 
-async def classify_and_normalize(message: str) -> dict:
-    return await asyncio.to_thread(_classify_sync, message)
+async def classify_and_normalize(message: str, system: str | None = None) -> dict:
+    return await asyncio.to_thread(_classify_sync, message, system or _ROUTER_SYSTEM)
 
 
-def _answer_sync(query: str, memories: list[dict], history: list[dict]) -> dict:
+def _answer_sync(query: str, memories: list[dict], history: list[dict], system: str) -> dict:
     context_block = "\n".join(
         f"- {m['content']} (saved {m['createdAt']:%Y-%m-%d})"
         if hasattr(m.get("createdAt"), "strftime")
@@ -115,7 +115,7 @@ def _answer_sync(query: str, memories: list[dict], history: list[dict]) -> dict:
         }
     )
 
-    answer = _converse(_ANSWER_SYSTEM, messages, max_tokens=1024, temperature=0.2)
+    answer = _converse(system, messages, max_tokens=1024, temperature=0.2)
     sources = [
         {"id": m["id"], "content": m["content"], "similarity": m["similarity"]}
         for m in memories
@@ -124,6 +124,8 @@ def _answer_sync(query: str, memories: list[dict], history: list[dict]) -> dict:
 
 
 async def generate_answer(
-    query: str, memories: list[dict], history: list[dict] | None = None
+    query: str, memories: list[dict], history: list[dict] | None = None, system: str | None = None
 ) -> dict:
-    return await asyncio.to_thread(_answer_sync, query, memories, history or [])
+    return await asyncio.to_thread(
+        _answer_sync, query, memories, history or [], system or _ANSWER_SYSTEM
+    )

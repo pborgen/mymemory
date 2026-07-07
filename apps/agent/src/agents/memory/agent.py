@@ -16,6 +16,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from agents.common.model import build_chat_model
+from agents.common.prompts import fetch_prompt
 from agents.memory.tools import MEMORY_TOOLS, USER_EMAIL
 
 SYSTEM_PROMPT = """You are a personal memory assistant for {email}.
@@ -35,12 +36,13 @@ class MemoryAgent:
     def __init__(self) -> None:
         model = build_chat_model(temperature=0.2, max_tokens=1024)
         self._model = model.bind_tools(MEMORY_TOOLS)
+        self._system_prompt = fetch_prompt("memory.agent", SYSTEM_PROMPT)
         self._graph = self._build_graph()
         self._thread_id = str(uuid.uuid4())
 
     def _build_graph(self):
         def call_model(state: MessagesState) -> dict:
-            system = SystemMessage(content=SYSTEM_PROMPT.format(email=USER_EMAIL))
+            system = SystemMessage(content=self._system_prompt.format(email=USER_EMAIL))
             response = self._model.invoke([system, *state["messages"]])
             return {"messages": [response]}
 
