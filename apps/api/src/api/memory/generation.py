@@ -1,4 +1,4 @@
-"""Generation — Bedrock Converse API for routing and answering.
+"""Generation — routing and answering across pluggable chat providers.
 
 Two LLM calls live here:
   - classify_and_normalize(message): decide whether the message is a fact to
@@ -7,21 +7,36 @@ Two LLM calls live here:
   - generate_answer(query, memories, history): answer a question grounded ONLY
     in the user's retrieved memories.
 
-Uses the Bedrock **Converse** API via boto3, which is model-agnostic: the same
-code works for Amazon Nova (cheap, the default) and Anthropic Claude — switch by
-changing RAG_MODEL_ID. Credentials resolve via the standard AWS chain.
+The provider is config.GEN_PROVIDER — "openai" (any OpenAI-compatible server
+such as vLLM), "ollama", or "bedrock". Messages are built in the Bedrock
+Converse shape ({"role", "content": [{"text": …}]}) and flattened per provider.
 """
 from __future__ import annotations
 
 import asyncio
 import json
+from functools import lru_cache
 
-import boto3
+import httpx
 
 from .. import config
 
-_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
-MODEL_ID = config.RAG_MODEL_ID
+
+@lru_cache(maxsize=1)
+def _bedrock_client():
+    # Imported/created lazily so a non-Bedrock deployment needs no boto3/AWS.
+    import boto3
+
+    return boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
+
+
+def _flatten(system: str, messages: list[dict]) -> list[dict]:
+    """Convert Converse-shaped messages to plain {role, content} chat turns."""
+    chat = [{"role": "system", "content": system}]
+    for m in messages:
+        text = "".join(part.get("text", "") for part in m.get("content", []))
+        chat.append({"role": m["role"], "content": text})
+    return chat
 
 _ROUTER_SYSTEM = """You route messages for a personal memory assistant. The user \
 either tells you a fact to remember about their life, or asks a question to \
@@ -51,10 +66,87 @@ and briefly suggest they tell you so you can remember it.
 - Do not mention "memories", "context", or "documents" in your wording; just answer naturally."""
 
 
-def _converse(system: str, messages: list[dict], max_tokens: int, temperature: float) -> str:
-    """One Bedrock Converse round-trip; returns the assistant's text."""
-    response = _client.converse(
-        modelId=MODEL_ID,
+# JSON schema the classifier must emit. Passed to the provider as a
+# constrained-decoding (guided JSON) hint so small models can't drift off-format.
+_CLASSIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string", "enum": ["store", "recall"]},
+        "fact": {"type": "string"},
+    },
+    "required": ["action", "fact"],
+    "additionalProperties": False,
+}
+
+
+def _converse(
+    system: str,
+    messages: list[dict],
+    max_tokens: int,
+    temperature: float,
+    json_schema: dict | None = None,
+) -> str:
+    """One chat round-trip; returns the assistant's text. Dispatches on
+    config.GEN_PROVIDER. `messages` use the Bedrock Converse shape. When
+    `json_schema` is given, the output is constrained to that schema on providers
+    that support it (openai/vLLM, ollama); bedrock falls back to prompt-only.
+    """
+    if config.GEN_PROVIDER == "openai":
+        return _openai_converse(system, messages, max_tokens, temperature, json_schema)
+    if config.GEN_PROVIDER == "ollama":
+        return _ollama_converse(system, messages, max_tokens, temperature, json_schema)
+    return _bedrock_converse(system, messages, max_tokens, temperature)
+
+
+def _openai_converse(
+    system: str, messages: list[dict], max_tokens: int, temperature: float,
+    json_schema: dict | None = None,
+) -> str:
+    body: dict = {
+        "model": config.OPENAI_CHAT_MODEL,
+        "messages": _flatten(system, messages),
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if json_schema is not None:
+        # vLLM's guided-decoding extension: forces schema-valid JSON output.
+        body["guided_json"] = json_schema
+        body["response_format"] = {"type": "json_object"}
+    response = httpx.post(
+        f"{config.OPENAI_BASE_URL}/chat/completions",
+        headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+        json=body,
+        timeout=120,
+    )
+    response.raise_for_status()
+    return (response.json()["choices"][0]["message"]["content"] or "").strip()
+
+
+def _ollama_converse(
+    system: str, messages: list[dict], max_tokens: int, temperature: float,
+    json_schema: dict | None = None,
+) -> str:
+    body: dict = {
+        "model": config.OLLAMA_CHAT_MODEL,
+        "messages": _flatten(system, messages),
+        "stream": False,
+        "options": {"temperature": temperature, "num_predict": max_tokens},
+    }
+    if json_schema is not None:
+        # Ollama accepts a JSON schema (or the literal "json") in `format`.
+        body["format"] = json_schema
+    response = httpx.post(
+        f"{config.OLLAMA_BASE_URL}/api/chat",
+        json=body,
+        timeout=120,
+    )
+    response.raise_for_status()
+    return (response.json().get("message", {}).get("content") or "").strip()
+
+
+def _bedrock_converse(system: str, messages: list[dict], max_tokens: int, temperature: float) -> str:
+    response = _bedrock_client().converse(
+        modelId=config.RAG_MODEL_ID,
         system=[{"text": system}],
         messages=messages,
         inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
@@ -69,6 +161,7 @@ def _classify_sync(message: str, system: str) -> dict:
         [{"role": "user", "content": [{"text": message}]}],
         max_tokens=400,
         temperature=0.0,
+        json_schema=_CLASSIFY_SCHEMA,
     )
     # Models occasionally wrap JSON in ```json fences; strip them.
     if text.startswith("```"):

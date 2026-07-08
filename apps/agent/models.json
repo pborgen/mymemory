@@ -1,6 +1,14 @@
 {
-  "active": "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+  "active": "openai/Qwen/Qwen2.5-0.5B-Instruct",
   "providers": {
+    "openai": {
+      "base_url_env": "OPENAI_BASE_URL",
+      "base_url_default": "http://localhost:8001/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "models": [
+        "Qwen/Qwen2.5-0.5B-Instruct"
+      ]
+    },
     "bedrock": {
       "region_env": "AWS_REGION",
       "region_default": "us-east-1",

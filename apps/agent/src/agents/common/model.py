@@ -60,6 +60,24 @@ def build_chat_model(temperature: float = 0.2, max_tokens: int = 1024) -> BaseCh
             model=model, api_key=api_key, temperature=temperature, max_tokens=max_tokens
         )
 
+    if provider == "openai":
+        # Any OpenAI-compatible server (vLLM, LM Studio, LiteLLM, …). vLLM ignores
+        # the key, but the client requires a non-empty one.
+        from langchain_openai import ChatOpenAI
+
+        base_url = os.getenv(
+            provider_cfg.get("base_url_env", "OPENAI_BASE_URL"),
+            provider_cfg.get("base_url_default", "http://localhost:8001/v1"),
+        )
+        api_key = os.getenv(provider_cfg.get("api_key_env", "OPENAI_API_KEY")) or "not-needed"
+        return ChatOpenAI(
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
@@ -89,5 +107,5 @@ def build_chat_model(temperature: float = 0.2, max_tokens: int = 1024) -> BaseCh
 
     raise RuntimeError(
         f"Provider '{provider}' is not implemented. "
-        "Supported: anthropic, groq, ollama, bedrock."
+        "Supported: openai, anthropic, groq, ollama, bedrock."
     )
