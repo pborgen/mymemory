@@ -55,7 +55,7 @@ async def save_prompt(key: str, body: dict = Body(default={}), email: str = Depe
     updated = await prompts_db.save_version(key, content, email)
     if not updated:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    store.invalidate(key)
+    await store.invalidate(key)
     return updated
 
 
@@ -67,7 +67,7 @@ async def rollback_prompt(key: str, body: dict = Body(default={}), email: str = 
     updated = await prompts_db.set_active(key, version_id)
     if not updated:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    store.invalidate(key)
+    await store.invalidate(key)
     return updated
 
 
@@ -76,5 +76,5 @@ async def reset_prompt(key: str, email: str = Depends(require_admin)):
     updated = await prompts_db.reset_prompt(key, email)
     if not updated:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    store.invalidate(key)
+    await store.invalidate(key)
     return updated

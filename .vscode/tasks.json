@@ -1,0 +1,14 @@
+{
+  // Starts (or reuses) the pgvector Postgres the API needs, then waits until it
+  // accepts connections. Used as the API config's preLaunchTask.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "start-postgres",
+      "type": "shell",
+      "command": "docker start mymemory-pg 2>/dev/null || docker run -d --name mymemory-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=mymemory -p 5544:5432 pgvector/pgvector:pg16; for i in $(seq 1 30); do docker exec mymemory-pg pg_isready -U postgres >/dev/null 2>&1 && exit 0; sleep 0.5; done; echo 'postgres did not become ready' >&2; exit 1",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true }
+    }
+  ]
+}

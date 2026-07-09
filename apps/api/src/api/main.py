@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from . import config, db
 from .memory.db import ensure_memory_tables
+from .prompts import store as prompt_store
 from .prompts.db import ensure_prompt_tables, seed_prompts
 from .routers import auth, memory, prompts
 
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
     await seed_prompts()
     print(f"MyMemory API ready (port {config.PORT})")
     yield
+    await prompt_store.close()
     await db.close_pool()
 
 

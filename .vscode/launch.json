@@ -1,0 +1,78 @@
+{
+  // Debug configs for the MyMemory app. `justMyCode: false` lets you step INTO
+  // FastAPI / LangGraph / httpx so you can see the whole request flow, not just
+  // this repo's code. Set breakpoints and hit F5.
+  //
+  // Good places to break while learning:
+  //   apps/api/src/api/memory/engine.py        (handle_message — the core loop)
+  //   apps/api/src/api/memory/generation.py    (classify + answer via the LLM)
+  //   apps/api/src/api/memory/embeddings.py    (vector embedding call)
+  //   apps/api/src/api/routers/prompts.py      (prompt CRUD)
+  //   apps/agent/src/agents/orchestrator/agent.py (the supervisor graph)
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "🐍 API (FastAPI :8099)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      // No --reload: reload spawns a child process that breakpoints can't attach
+      // to. Stop/start (F5) after code edits instead.
+      "args": ["api.main:app", "--host", "0.0.0.0", "--port", "8099"],
+      "cwd": "${workspaceFolder}/apps/api",
+      "python": "${workspaceFolder}/apps/api/.venv/bin/python",
+      "envFile": "${workspaceFolder}/apps/api/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "start-postgres"
+    },
+    {
+      "name": "🤖 Agent: Orchestrator",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "agents.orchestrator.cli",
+      "cwd": "${workspaceFolder}/apps/agent",
+      "python": "${workspaceFolder}/apps/agent/.venv/bin/python",
+      "envFile": "${workspaceFolder}/apps/agent/.env",
+      // integratedTerminal so the REPL can read your typed input.
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "🤖 Agent: Memory",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "agents.memory.cli",
+      "cwd": "${workspaceFolder}/apps/agent",
+      "python": "${workspaceFolder}/apps/agent/.venv/bin/python",
+      "envFile": "${workspaceFolder}/apps/agent/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "🌐 Web (Next.js :3000)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/apps/web",
+      // Point the browser client at the debugged API on :8099.
+      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:8099" }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "🚀 Everything (API + Web + Orchestrator)",
+      "configurations": [
+        "🐍 API (FastAPI :8099)",
+        "🌐 Web (Next.js :3000)",
+        "🤖 Agent: Orchestrator"
+      ],
+      "stopAll": true
+    },
+    {
+      "name": "🐍 Backend (API + Orchestrator)",
+      "configurations": ["🐍 API (FastAPI :8099)", "🤖 Agent: Orchestrator"],
+      "stopAll": true
+    }
+  ]
+}

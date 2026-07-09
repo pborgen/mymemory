@@ -19,6 +19,10 @@ ADMIN_EMAILS: list[str] = [
 ]
 AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
 
+# Redis connection string for the shared prompt cache (api.prompts.store). Unset
+# in local dev is fine — the resolver reads straight through to Postgres.
+REDIS_URL: str | None = os.getenv("REDIS_URL")
+
 # Generation and embeddings are configured independently, because a single
 # server often provides only one of them (e.g. a vLLM chat server has no
 # embeddings endpoint). Each provider is one of: "openai", "ollama", "bedrock".

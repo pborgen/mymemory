@@ -30,8 +30,35 @@ Monorepo with npm workspaces:
   (`ensure_tables()` in `apps/api/src/api/db.py`).
 - **Auth:** Google OAuth (Bearer) + dev `x-user-email` header. Email is the
   primary user identifier; memories are scoped per email.
-- **AI:** Claude on AWS Bedrock for answer generation; Amazon Titan Text
-  Embeddings v2 (Bedrock) for memory embeddings.
+- **AI:** Pluggable model providers, configured independently for generation and
+  embeddings (`GEN_PROVIDER` / `EMBED_PROVIDER` — each one of `openai` /
+  `ollama` / `bedrock`; see `apps/api/src/api/config.py`).
+  - **Where the models run (current local/dev setup):** both live on a **remote
+    GPU box (`paul-System-Product-Name`) reached over Tailscale at
+    `100.99.15.47`**, not on the API host.
+    - *Generation:* an OpenAI-compatible **vLLM** server at
+      `http://100.99.15.47:8001/v1` (`OPENAI_BASE_URL`).
+    - *Embeddings:* **Ollama** at `http://100.99.15.47:11434` (`EMBED_BASE_URL`,
+      model `mxbai-embed-large`, 1024-dim). Ollama must be bound to the tailnet
+      (`OLLAMA_HOST=0.0.0.0`) and have the embed model pulled.
+  - Both are reachable only while connected to the Tailscale tailnet; if either
+    host is unreachable, `POST /api/memory/chat` fails at the embed/generate step.
+  - AWS Bedrock (Claude/Nova generation, Amazon Titan embeddings) remains
+    available by setting the relevant provider to `bedrock`.
+  - **Restarting Ollama on the remote box (`100.99.15.47`, over Tailscale):**
+    Ollama is a **user-local install** at `~/.local/bin/ollama` (no `sudo` on
+    that host — sudo needs a password) and is **not** a systemd service, so it
+    does **not** survive a reboot. If `POST /api/memory/chat` starts failing at
+    the embed step, SSH in as `paul` and restart it:
+    ```bash
+    ssh paul@100.99.15.47        # Tailscale SSH; remote user is `paul`
+    OLLAMA_HOST=0.0.0.0:11434 setsid nohup ~/.local/bin/ollama serve \
+      > ~/.ollama/logs/serve.log 2>&1 < /dev/null &
+    ~/.local/bin/ollama pull mxbai-embed-large   # only if the model is missing
+    ```
+    Verify from a tailnet machine: `curl http://100.99.15.47:11434/api/tags`.
+    Binds to `0.0.0.0` so it's reachable over the tailnet; the GPU is held by
+    vLLM, so embeddings run on CPU.
 
 ## Commands
 

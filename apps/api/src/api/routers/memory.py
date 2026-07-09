@@ -13,13 +13,21 @@ from ..memory import engine
 router = APIRouter()
 
 
+def _valid_session_id(value: object) -> str:
+    """Accept only a well-formed UUID from the client; otherwise mint a fresh one."""
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError, TypeError):
+        return str(uuid.uuid4())
+
+
 @router.post("/api/memory/chat")
 async def memory_chat(body: dict = Body(default={}), email: str = Depends(require_user)):
     message = (body.get("message") or "").strip()
     if not message:
         return JSONResponse({"error": "Message required"}, status_code=400)
 
-    session_id = body.get("sessionId") or str(uuid.uuid4())
+    session_id = _valid_session_id(body.get("sessionId"))
     source = body.get("source") or "chat"
     return await engine.handle_message(email, message, session_id, source)
 
