@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -33,9 +34,12 @@ Be concise and natural."""
 
 
 class MemoryAgent:
-    def __init__(self) -> None:
-        model = build_chat_model(temperature=0.2, max_tokens=1024)
-        self._model = model.bind_tools(MEMORY_TOOLS)
+    def __init__(self, model: BaseChatModel | None = None) -> None:
+        # Optional `model` lets tests inject a scripted chat model and step the
+        # real ReAct graph without a live LLM. Production path builds one from
+        # models.json via build_chat_model().
+        chat = model or build_chat_model(temperature=0.2, max_tokens=1024)
+        self._model = chat.bind_tools(MEMORY_TOOLS)
         self._system_prompt = fetch_prompt("memory.agent", SYSTEM_PROMPT)
         self._graph = self._build_graph()
         self._thread_id = str(uuid.uuid4())

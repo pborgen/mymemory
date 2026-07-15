@@ -20,6 +20,11 @@ Monorepo with npm workspaces:
   workspace). The `memory` agent is a tool-using CLI (`remember`/`recall` tools
   that call the API). One folder per agent under `src/agents/`; `common/` holds
   shared model/config helpers. Run with `uv run memory` from `apps/agent/`.
+- `apps/mcp` — **MCP server** (standalone `uv` project). Exposes MyMemory to
+  Cursor via the Model Context Protocol: tools (`remember`/`recall`/…), a
+  `memory://` resource, and prompt templates. Talks to the FastAPI API over
+  httpx. Run with `uv run mymemory-mcp` from `apps/mcp/`; Cursor config is
+  `.cursor/mcp.json`.
 
 ## Tech Stack
 

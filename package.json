@@ -13,6 +13,8 @@
     "api:dev": "cd apps/api && uv run uvicorn api.main:app --reload --port 8080",
     "api:start": "cd apps/api && uv run api",
     "agent:memory": "cd apps/agent && uv run memory",
-    "agent:orchestrator": "cd apps/agent && uv run orchestrator"
+    "agent:orchestrator": "cd apps/agent && uv run orchestrator",
+    "mcp:dev": "cd apps/mcp && uv run mcp dev src/mymemory_mcp/server.py",
+    "mcp:serve": "cd apps/mcp && uv run mymemory-mcp"
   }
 }
