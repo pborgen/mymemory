@@ -12,12 +12,18 @@ PORT: int = int(os.getenv("PORT", "8080"))
 GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
 ALLOW_DEV_AUTH_HEADERS: bool = os.getenv("ALLOW_DEV_AUTH_HEADERS") == "true"
 
-# Emails allowed to edit managed prompts (comma-separated). When empty and dev
-# auth headers are enabled, any authenticated user may edit (local development).
-ADMIN_EMAILS: list[str] = [
-    e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
-]
+# Super admin email — upserted as profiles.role=admin on API startup. Day-to-day
+# grants for other admins happen in the DB (see /api/admins). Leave blank only
+# if you will set roles via SQL yourself.
+SUPER_ADMIN_EMAIL: str = os.getenv("SUPER_ADMIN_EMAIL", "").strip().lower()
 AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+
+# ── Guardrails ────────────────────────────────────────────
+# Max characters accepted on chat / store input (hard length limit).
+GUARDRAIL_MAX_MESSAGE_CHARS: int = int(os.getenv("GUARDRAIL_MAX_MESSAGE_CHARS", "4000"))
+# Drop retrieval hits below this cosine similarity; empty → hard refuse (no generate).
+# Integration tests with fake embeddings set this to 0 via monkeypatch.
+RETRIEVAL_MIN_SIMILARITY: float = float(os.getenv("RETRIEVAL_MIN_SIMILARITY", "0.25"))
 
 # Redis connection string for the shared prompt cache (api.prompts.store). Unset
 # in local dev is fine — the resolver reads straight through to Postgres.

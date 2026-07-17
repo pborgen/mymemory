@@ -632,6 +632,26 @@ section.block {
 .prompt-editor:focus {
   border-color: var(--accent);
 }
+.prompt-note-label {
+  display: block;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text);
+}
+.prompt-note {
+  width: 100%;
+  margin-top: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+.prompt-note:focus {
+  border-color: var(--accent);
+}
 .prompt-actions {
   display: flex;
   flex-wrap: wrap;

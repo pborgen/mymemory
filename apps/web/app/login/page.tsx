@@ -62,7 +62,7 @@ export default function Login() {
               <button
                 key={acct.email}
                 className="acct"
-                onClick={() => signInDev(acct.email)}
+                onClick={() => void signInDev(acct.email)}
               >
                 <div className="name">{acct.name}</div>
                 <div className="email">{acct.email}</div>

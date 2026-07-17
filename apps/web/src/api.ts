@@ -6,6 +6,7 @@ import type {
   ChatResponse,
   DevAccount,
   Memory,
+  Profile,
   Prompt,
   PromptVersion,
 } from "./types";
@@ -62,8 +63,12 @@ async function apiFetch<T>(method: string, path: string, body?: unknown): Promis
   if (!res.ok) {
     let message = `API ${res.status}`;
     try {
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        eval?: { summary?: string; results?: { id: string; passed: boolean; detail: string }[] };
+      };
       if (data?.error) message = data.error;
+      if (data?.eval?.summary) message = `${message} (${data.eval.summary})`;
     } catch {
       /* ignore */
     }
@@ -95,9 +100,55 @@ export const fetchPrompt = (key: string) =>
   apiFetch<Prompt>("GET", `/api/prompts/${key}`);
 export const fetchPromptVersions = (key: string) =>
   apiFetch<PromptVersion[]>("GET", `/api/prompts/${key}/versions`);
-export const savePrompt = (key: string, content: string) =>
-  apiFetch<Prompt>("PUT", `/api/prompts/${key}`, { content });
+export const savePrompt = (
+  key: string,
+  content: string,
+  changeNote: string,
+  opts?: { activate?: boolean; forceReason?: string },
+) =>
+  apiFetch<Prompt & { eval?: PromptEvalReport; activated?: boolean }>(
+    "PUT",
+    `/api/prompts/${key}`,
+    {
+      content,
+      changeNote,
+      activate: opts?.activate ?? true,
+      forceReason: opts?.forceReason,
+    },
+  );
+export const evalPrompt = (key: string, content: string) =>
+  apiFetch<PromptEvalReport>("POST", `/api/prompts/${key}/eval`, { content });
+export const activatePrompt = (
+  key: string,
+  versionId: string,
+  forceReason?: string,
+) =>
+  apiFetch<Prompt & { eval?: PromptEvalReport; activated?: boolean }>(
+    "POST",
+    `/api/prompts/${key}/activate`,
+    { versionId, forceReason },
+  );
 export const rollbackPrompt = (key: string, versionId: string) =>
   apiFetch<Prompt>("POST", `/api/prompts/${key}/rollback`, { versionId });
 export const resetPrompt = (key: string) =>
   apiFetch<Prompt>("POST", `/api/prompts/${key}/reset`);
+
+// Roles (DB-backed profiles.role)
+export const fetchMe = () => apiFetch<Profile & { isAdmin: boolean }>("GET", "/api/me");
+export const fetchAdmins = () => apiFetch<Profile[]>("GET", "/api/admins");
+export const setAdminRole = (email: string, role: "admin" | "user") =>
+  apiFetch<Profile>("PUT", `/api/admins/${encodeURIComponent(email)}`, { role });
+
+export const fetchMetricsSummary = (hours = 24) =>
+  apiFetch<MetricsSummary>("GET", `/api/metrics/summary?hours=${hours}`);
+
+export const submitChatFeedback = (
+  requestId: string,
+  rating: 1 | -1,
+  comment = "",
+) =>
+  apiFetch<{ ok: boolean }>("POST", "/api/memory/chat/feedback", {
+    requestId,
+    rating,
+    comment,
+  });

@@ -30,6 +30,7 @@ export default function PromptEditor() {
   const queryClient = useQueryClient();
 
   const [draft, setDraft] = useState<string | null>(null);
+  const [changeNote, setChangeNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const { data: prompt, isLoading } = useQuery({
@@ -56,13 +57,14 @@ export default function PromptEditor() {
 
   const onResult = (content: string) => {
     setDraft(content);
+    setChangeNote("");
     setError(null);
     invalidate();
   };
   const onError = (e: Error) => setError(e.message);
 
   const save = useMutation({
-    mutationFn: () => savePrompt(promptKey, draft ?? ""),
+    mutationFn: () => savePrompt(promptKey, draft ?? "", changeNote.trim()),
     onSuccess: (p) => onResult(p.content),
     onError,
   });
@@ -155,13 +157,33 @@ export default function PromptEditor() {
           }}
         />
 
+        <Text style={{ color: theme.textDim, fontSize: 12 }}>
+          Change note (required — why is this version shipping?)
+        </Text>
+        <TextInput
+          value={changeNote}
+          onChangeText={setChangeNote}
+          placeholder="e.g. Tighten refuse-if-unknown"
+          placeholderTextColor={theme.textDim}
+          editable={!busy}
+          style={{
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            borderWidth: 1,
+            borderRadius: 10,
+            color: theme.text,
+            padding: 12,
+            fontSize: 14,
+          }}
+        />
+
         {error && <Text style={{ color: theme.danger, fontSize: 13 }}>{error}</Text>}
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           <Btn
             label={save.isPending ? "Saving…" : "Save new version"}
             primary
-            disabled={!dirty || busy || !(draft ?? "").trim()}
+            disabled={!dirty || busy || !(draft ?? "").trim() || !changeNote.trim()}
             onPress={() => save.mutate()}
           />
           <Btn
@@ -254,6 +276,11 @@ function VersionRow({
         <Text style={{ color: theme.textDim, fontSize: 11, marginTop: 3 }}>
           {version.createdBy || "system"} · {new Date(version.createdAt).toLocaleString()}
         </Text>
+        {version.changeNote ? (
+          <Text style={{ color: theme.textDim, fontSize: 12, marginTop: 4 }}>
+            Note: {version.changeNote}
+          </Text>
+        ) : null}
         <Text style={{ color: theme.textDim, fontSize: 12, marginTop: 6 }} numberOfLines={3}>
           {version.content}
         </Text>

@@ -73,9 +73,14 @@ async def ensure_tables() -> None:
         CREATE TABLE IF NOT EXISTS profiles (
           email      TEXT PRIMARY KEY,
           full_name  TEXT DEFAULT '',
+          role       TEXT NOT NULL DEFAULT 'user',
           created_at TIMESTAMPTZ DEFAULT now()
         )
         """
+    )
+    # Existing DBs created before roles: add column without wiping profiles.
+    await _execute(
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'"
     )
 
 
@@ -86,7 +91,7 @@ async def ensure_profile(email: str) -> None:
     """Create a bare profile row for this email if one doesn't exist."""
     await _execute(
         "INSERT INTO profiles (email) VALUES ($1) ON CONFLICT (email) DO NOTHING",
-        email,
+        email.lower(),
     )
 
 
@@ -98,19 +103,78 @@ async def ensure_google_user(email: str, full_name: str | None = None) -> None:
         ON CONFLICT (email) DO UPDATE
           SET full_name = COALESCE(NULLIF(EXCLUDED.full_name, ''), profiles.full_name)
         """,
-        email,
+        email.lower(),
         full_name or "",
     )
 
 
 async def get_profile(email: str) -> dict | None:
     row = await _fetchrow(
-        "SELECT email, full_name, created_at FROM profiles WHERE email = $1", email
+        "SELECT email, full_name, role, created_at FROM profiles WHERE email = $1",
+        email.lower(),
     )
     if not row:
         return None
     return {
         "email": row["email"],
         "fullName": row["full_name"],
+        "role": row["role"] or "user",
         "createdAt": row["created_at"],
     }
+
+
+async def is_admin(email: str) -> bool:
+    row = await _fetchrow(
+        "SELECT role FROM profiles WHERE email = $1", email.lower()
+    )
+    return bool(row and row["role"] == "admin")
+
+
+async def count_admins() -> int:
+    return int(
+        await pool().fetchval("SELECT COUNT(*) FROM profiles WHERE role = 'admin'") or 0
+    )
+
+
+async def set_role(email: str, role: str) -> dict | None:
+    """Set profile role to 'user' or 'admin'. Ensures the profile exists."""
+    if role not in ("user", "admin"):
+        raise ValueError("role must be 'user' or 'admin'")
+    email = email.lower().strip()
+    if not email or "@" not in email:
+        raise ValueError("invalid email")
+    await ensure_profile(email)
+    await _execute(
+        "UPDATE profiles SET role = $2 WHERE email = $1",
+        email,
+        role,
+    )
+    return await get_profile(email)
+
+
+async def list_admins() -> list[dict]:
+    rows = await _fetch(
+        """
+        SELECT email, full_name, role, created_at
+        FROM profiles
+        WHERE role = 'admin'
+        ORDER BY email ASC
+        """
+    )
+    return [
+        {
+            "email": r["email"],
+            "fullName": r["full_name"],
+            "role": r["role"],
+            "createdAt": r["created_at"],
+        }
+        for r in rows
+    ]
+
+
+async def seed_super_admin() -> None:
+    """Ensure SUPER_ADMIN_EMAIL exists and has role=admin (env-defined root admin)."""
+    email = config.SUPER_ADMIN_EMAIL
+    if not email:
+        return
+    await set_role(email, "admin")

@@ -21,6 +21,11 @@ export interface ChatResponse {
   action: "stored" | "recalled";
   sources: MemorySource[];
   sessionId: string;
+  /** Prompt keys → version pins used for this turn (prompt ops / debugging). */
+  promptVersions?: Record<
+    string,
+    { version: number | null; versionId: string | null; source: string }
+  >;
 }
 
 export interface Memory {
@@ -44,6 +49,7 @@ export interface PromptVersion {
   id: string;
   version: number;
   content: string;
+  changeNote: string;
   createdAt: string;
   createdBy: string;
   isActive: boolean;

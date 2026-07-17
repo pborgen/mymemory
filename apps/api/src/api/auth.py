@@ -1,7 +1,8 @@
 """Authentication — Google OAuth (Bearer) + dev `x-user-email` header.
 
-Exposed as FastAPI dependencies. Email is the user identifier; there are no
-roles — every authenticated user is a regular user who owns their memories.
+Exposed as FastAPI dependencies. Email is the user identifier. Admin role lives
+on `profiles.role` in Postgres. The env `SUPER_ADMIN_EMAIL` is seeded as the
+root admin on startup; other admins are granted via `/api/admins`.
 """
 from __future__ import annotations
 
@@ -46,5 +47,14 @@ async def require_user(request: Request) -> str:
         raise HTTPException(status_code=401, detail="Unauthorized")
     if not email:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    email = email.lower().strip()
     await db.ensure_profile(email)
+    return email
+
+
+async def require_admin(request: Request) -> str:
+    """Authenticated user whose profiles.role is admin."""
+    email = await require_user(request)
+    if not await db.is_admin(email):
+        raise HTTPException(status_code=403, detail="Admin access required")
     return email

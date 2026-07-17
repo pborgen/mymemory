@@ -17,6 +17,7 @@ Or open the MCP Inspector to poke at tools/resources/prompts by hand:
 from __future__ import annotations
 
 import json
+import uuid
 
 from mcp.server.fastmcp import FastMCP
 
@@ -69,7 +70,15 @@ def list_memories() -> str:
 
 @mcp.tool()
 def delete_memory(memory_id: str) -> str:
-    """Delete one memory by its id (from list_memories)."""
+    """Delete one memory by its id (from list_memories).
+
+    Only UUIDs from list_memories are accepted — the API also scopes delete
+    to the authenticated user (tool allowlist + authz).
+    """
+    try:
+        uuid.UUID(memory_id)
+    except (ValueError, TypeError, AttributeError):
+        return json.dumps({"error": "memory_id must be a UUID from list_memories"})
     return api.request("DELETE", f"/api/memory/{memory_id}")
 
 

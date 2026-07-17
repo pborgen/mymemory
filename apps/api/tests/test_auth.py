@@ -76,4 +76,10 @@ async def test_session_unauthenticated(client):
 async def test_session_authenticated_with_dev_header(client, auth, user_email):
     resp = await client.get("/api/session", headers=auth)
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "authenticated": True, "email": user_email}
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["authenticated"] is True
+    assert body["email"] == user_email
+    # Ordinary users are not auto-promoted; only SUPER_ADMIN_EMAIL is seeded.
+    assert body["role"] == "user"
+    assert body["isAdmin"] is False

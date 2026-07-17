@@ -94,8 +94,8 @@ export const fetchPrompt = (key: string) =>
   apiFetch<Prompt>("GET", `/api/prompts/${key}`);
 export const fetchPromptVersions = (key: string) =>
   apiFetch<PromptVersion[]>("GET", `/api/prompts/${key}/versions`);
-export const savePrompt = (key: string, content: string) =>
-  apiFetch<Prompt>("PUT", `/api/prompts/${key}`, { content });
+export const savePrompt = (key: string, content: string, changeNote: string) =>
+  apiFetch<Prompt>("PUT", `/api/prompts/${key}`, { content, changeNote });
 export const rollbackPrompt = (key: string, versionId: string) =>
   apiFetch<Prompt>("POST", `/api/prompts/${key}/rollback`, { versionId });
 export const resetPrompt = (key: string) =>

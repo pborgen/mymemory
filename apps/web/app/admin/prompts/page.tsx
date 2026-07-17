@@ -12,19 +12,20 @@ import type { Prompt } from "@/types";
 
 export default function PromptsAdmin() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.replace("/login");
-  }, [authLoading, isAuthenticated, router]);
+    else if (!authLoading && isAuthenticated && !isAdmin) router.replace("/chat");
+  }, [authLoading, isAuthenticated, isAdmin, router]);
 
   const { data: prompts = [], isLoading } = useQuery({
     queryKey: ["prompts"],
     queryFn: fetchPrompts,
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && isAdmin,
   });
 
-  if (authLoading || !isAuthenticated) {
+  if (authLoading || !isAuthenticated || !isAdmin) {
     return (
       <div className="app-shell">
         <div className="fill-center">

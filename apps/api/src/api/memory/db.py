@@ -59,9 +59,14 @@ async def ensure_memory_tables() -> None:
           role       TEXT NOT NULL,
           content    TEXT NOT NULL,
           sources    JSONB DEFAULT '[]',
+          meta       JSONB DEFAULT '{}',
           created_at TIMESTAMPTZ DEFAULT now()
         )
         """
+    )
+    # Existing DBs created before meta: add without wiping chat history.
+    await _execute(
+        "ALTER TABLE memory_chat_history ADD COLUMN IF NOT EXISTS meta JSONB DEFAULT '{}'"
     )
 
 
@@ -130,21 +135,28 @@ async def search_memories(email: str, query_embedding: list[float], top_k: int) 
 
 
 async def save_chat_message(
-    id: str, email: str, session_id: str, role: str, content: str, sources: list | None = None
+    id: str,
+    email: str,
+    session_id: str,
+    role: str,
+    content: str,
+    sources: list | None = None,
+    meta: dict | None = None,
 ) -> None:
     await _execute(
         """
-        INSERT INTO memory_chat_history (id, email, session_id, role, content, sources)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+        INSERT INTO memory_chat_history
+          (id, email, session_id, role, content, sources, meta)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
         """,
-        id, email, session_id, role, content, sources or [],
+        id, email, session_id, role, content, sources or [], meta or {},
     )
 
 
 async def get_chat_history(email: str, session_id: str) -> list[dict]:
     rows = await _fetch(
         """
-        SELECT role, content, sources, created_at
+        SELECT role, content, sources, meta, created_at
         FROM memory_chat_history
         WHERE email = $1 AND session_id = $2
         ORDER BY created_at ASC
@@ -153,8 +165,11 @@ async def get_chat_history(email: str, session_id: str) -> list[dict]:
     )
     return [
         {
-            "role": r["role"], "content": r["content"],
-            "sources": r["sources"] or [], "createdAt": r["created_at"],
+            "role": r["role"],
+            "content": r["content"],
+            "sources": r["sources"] or [],
+            "meta": r["meta"] or {},
+            "createdAt": r["created_at"],
         }
         for r in rows
     ]

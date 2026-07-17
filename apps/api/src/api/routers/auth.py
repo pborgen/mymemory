@@ -63,4 +63,14 @@ async def session(request: Request):
         email = None
     if not email:
         return JSONResponse({"ok": False, "authenticated": False}, status_code=401)
-    return {"ok": True, "authenticated": True, "email": email}
+    email = email.lower().strip()
+    await db.ensure_profile(email)
+    profile = await db.get_profile(email)
+    role = (profile or {}).get("role") or "user"
+    return {
+        "ok": True,
+        "authenticated": True,
+        "email": email,
+        "role": role,
+        "isAdmin": role == "admin",
+    }

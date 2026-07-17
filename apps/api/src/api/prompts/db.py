@@ -2,8 +2,9 @@
 
 Reuses the shared asyncpg pool from api.db. Two tables: `prompts` (one row per
 key, pointing at its active version) and `prompt_versions` (append-only history).
-Editing inserts a new version and re-points active; rollback re-points active to
-an existing version; reset inserts a new version from the registry default.
+Editing inserts a new version and re-points active (each save stores a
+`change_note` rationale); rollback re-points active to an existing version;
+reset inserts a new version from the registry default.
 
 Helpers return camelCase dicts, matching the convention in api.db / memory.db.
 """
@@ -50,10 +51,15 @@ async def ensure_prompt_tables() -> None:
           prompt_key  TEXT NOT NULL REFERENCES prompts(key),
           version     INT  NOT NULL,
           content     TEXT NOT NULL,
+          change_note TEXT NOT NULL DEFAULT '',
           created_at  TIMESTAMPTZ DEFAULT now(),
           created_by  TEXT DEFAULT ''
         )
         """
+    )
+    # Existing DBs created before change_note: add the column without wiping history.
+    await _execute(
+        "ALTER TABLE prompt_versions ADD COLUMN IF NOT EXISTS change_note TEXT NOT NULL DEFAULT ''"
     )
     await _execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_prompt_versions "
@@ -86,10 +92,11 @@ async def seed_prompts() -> None:
         )
         await _execute(
             """
-            INSERT INTO prompt_versions (id, prompt_key, version, content, created_by)
-            VALUES ($1, $2, 1, $3, 'system')
+            INSERT INTO prompt_versions
+              (id, prompt_key, version, content, change_note, created_by)
+            VALUES ($1, $2, 1, $3, $4, 'system')
             """,
-            version_id, d["key"], d["content"],
+            version_id, d["key"], d["content"], "Initial seed",
         )
 
 
@@ -134,22 +141,38 @@ async def get_prompt(key: str) -> dict | None:
 
 async def get_active_content(key: str) -> str | None:
     """Active content for a key, or None if the key is unknown."""
+    resolved = await get_active_resolved(key)
+    return resolved["content"] if resolved else None
+
+
+async def get_active_resolved(key: str) -> dict | None:
+    """Active version metadata + content for a key, or None if unknown.
+
+    Used by the inference path so every chat turn can pin which prompt version
+    ran (production debugging / prompt ops).
+    """
     row = await _fetchrow(
         """
-        SELECT v.content
+        SELECT v.id, v.version, v.content
         FROM prompts p
         JOIN prompt_versions v ON v.id = p.active_version_id
         WHERE p.key = $1
         """,
         key,
     )
-    return row["content"] if row else None
+    if not row:
+        return None
+    return {
+        "versionId": str(row["id"]),
+        "version": row["version"],
+        "content": row["content"],
+    }
 
 
 async def list_versions(key: str) -> list[dict]:
     rows = await _fetch(
         """
-        SELECT v.id, v.version, v.content, v.created_at, v.created_by,
+        SELECT v.id, v.version, v.content, v.change_note, v.created_at, v.created_by,
                (v.id = p.active_version_id) AS is_active
         FROM prompt_versions v
         JOIN prompts p ON p.key = v.prompt_key
@@ -163,6 +186,7 @@ async def list_versions(key: str) -> list[dict]:
             "id": str(r["id"]),
             "version": r["version"],
             "content": r["content"],
+            "changeNote": r["change_note"] or "",
             "createdAt": r["created_at"],
             "createdBy": r["created_by"],
             "isActive": r["is_active"],
@@ -171,8 +195,15 @@ async def list_versions(key: str) -> list[dict]:
     ]
 
 
-async def save_version(key: str, content: str, by: str) -> dict | None:
-    """Append a new version and make it active. Returns the updated prompt."""
+async def save_version(
+    key: str,
+    content: str,
+    by: str,
+    change_note: str = "",
+    *,
+    activate: bool = True,
+) -> dict | None:
+    """Append a new version. If activate=True, make it the active pointer."""
     if not await _fetchrow("SELECT 1 FROM prompts WHERE key = $1", key):
         return None
     next_version = await _db.pool().fetchval(
@@ -182,16 +213,48 @@ async def save_version(key: str, content: str, by: str) -> dict | None:
     version_id = str(uuid.uuid4())
     await _execute(
         """
-        INSERT INTO prompt_versions (id, prompt_key, version, content, created_by)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO prompt_versions
+          (id, prompt_key, version, content, change_note, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6)
         """,
-        version_id, key, next_version, content, by,
+        version_id, key, next_version, content, change_note, by,
     )
-    await _execute(
-        "UPDATE prompts SET active_version_id = $2, updated_at = now() WHERE key = $1",
-        key, version_id,
-    )
+    if activate:
+        await _execute(
+            "UPDATE prompts SET active_version_id = $2, updated_at = now() WHERE key = $1",
+            key, version_id,
+        )
+    else:
+        await _execute(
+            "UPDATE prompts SET updated_at = now() WHERE key = $1",
+            key,
+        )
     return await get_prompt(key)
+
+
+async def get_version(key: str, version_id: str) -> dict | None:
+    row = await _fetchrow(
+        """
+        SELECT v.id, v.version, v.content, v.change_note, v.created_at, v.created_by,
+               (v.id = p.active_version_id) AS is_active
+        FROM prompt_versions v
+        JOIN prompts p ON p.key = v.prompt_key
+        WHERE v.prompt_key = $1 AND v.id = $2
+        """,
+        key,
+        uuid.UUID(version_id),
+    )
+    if not row:
+        return None
+    return {
+        "id": str(row["id"]),
+        "version": row["version"],
+        "content": row["content"],
+        "changeNote": row["change_note"] or "",
+        "createdAt": row["created_at"],
+        "createdBy": row["created_by"],
+        "isActive": row["is_active"],
+    }
 
 
 async def set_active(key: str, version_id: str) -> dict | None:
@@ -214,4 +277,10 @@ async def reset_prompt(key: str, by: str) -> dict | None:
     default = DEFAULTS_BY_KEY.get(key)
     if not default:
         return None
-    return await save_version(key, default["content"], by)
+    return await save_version(
+        key,
+        default["content"],
+        by,
+        change_note="Reset to registry default",
+        activate=True,
+    )
