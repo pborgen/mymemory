@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from . import config, db, observability as obs
+from . import langfuse_tracing as lf
 from .memory.db import ensure_memory_tables
 from .prompts import store as prompt_store
 from .prompts.db import ensure_prompt_tables, seed_prompts
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     print(f"MyMemory API ready (port {config.PORT})")
     yield
     await prompt_store.close()
+    lf.shutdown()
     await db.close_pool()
 
 
@@ -110,6 +112,11 @@ async def health():
         "ok": True,
         "gen": config.GEN_PROVIDER,
         "embed": config.EMBED_PROVIDER,
+    }
+    checks["langfuse"] = {
+        "ok": True,
+        "enabled": lf.enabled(),
+        "baseUrl": config.LANGFUSE_BASE_URL if lf.enabled() else None,
     }
 
     status = 200 if ok else 503

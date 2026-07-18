@@ -1,0 +1,9 @@
+Underwriting conditions — LN-2026-4418 (synthetic demo data, not real PII)
+
+The underwriter note for LN-2026-4418 says: provide updated bank statements before clear-to-close.
+Additional condition: employment verification letter dated within 30 days of closing.
+
+Contacts
+The loan officer of record for LN-2026-4418 is Sam Rivera.
+The borrower preferred contact method is email; do not call after 8pm local time.
+The borrower's loan number is LN-2026-4418.

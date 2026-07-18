@@ -72,9 +72,32 @@ async def metrics_summary(hours: int = 24, _: str = Depends(require_admin)):
     return await obs.metrics_summary(hours)
 
 
+@router.get("/api/memory/audit")
+async def memory_audit(email: str = Depends(require_user), limit: int = 50):
+    """Append-only access/store trail for the current user (governance demo)."""
+    limit = max(1, min(limit, 200))
+    return await mem_db.list_audit(email, limit)
+
+
 @router.get("/api/memory")
 async def list_memories(email: str = Depends(require_user)):
     return await mem_db.list_memories(email)
+
+
+@router.get("/api/memory/report")
+async def memory_report(
+    email: str = Depends(require_user),
+    loan: str = "",
+    tag: str = "",
+    sourceUriPrefix: str = "",
+):
+    """Filter memories for warehouse-style reporting (loan / tag / lineage)."""
+    return await mem_db.list_memories_for_report(
+        email,
+        loan=loan.strip(),
+        tag=tag.strip(),
+        source_uri_prefix=sourceUriPrefix.strip(),
+    )
 
 
 @router.post("/api/memory")
@@ -89,7 +112,27 @@ async def create_memory(body: dict = Body(default={}), email: str = Depends(requ
             status_code=400,
         )
     source = body.get("source") or "manual"
-    stored = await engine.store_fact(email, content, source)
+    source_uri = (body.get("sourceUri") or "").strip()
+    pipeline_version = (body.get("pipelineVersion") or "").strip()
+    stored = await engine.store_fact(
+        email,
+        content,
+        source,
+        source_uri=source_uri,
+        pipeline_version=pipeline_version,
+    )
+    await mem_db.write_audit(
+        email,
+        "store",
+        memory_id=stored["id"],
+        detail={
+            "piiTags": stored.get("piiTags") or [],
+            "sensitivity": stored.get("sensitivity"),
+            "source": source,
+            "sourceUri": source_uri or None,
+            "pipelineVersion": pipeline_version or None,
+        },
+    )
     return {"ok": True, "memory": stored}
 
 
@@ -98,4 +141,7 @@ async def delete_memory(memory_id: str, email: str = Depends(require_user)):
     deleted = await mem_db.delete_memory(email, memory_id)
     if not deleted:
         return JSONResponse({"error": "Not found"}, status_code=404)
+    await mem_db.write_audit(
+        email, "delete", memory_id=memory_id, detail={"soft": True}
+    )
     return {"ok": True}

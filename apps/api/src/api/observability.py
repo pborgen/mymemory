@@ -14,6 +14,7 @@ from contextvars import ContextVar
 from typing import Any
 
 from . import db as _db
+from . import langfuse_tracing as lf
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
@@ -240,6 +241,8 @@ async def save_feedback(
         rating,
         comment,
     )
+    # Mirror thumbs into Langfuse when tracing is on (same seeded trace id).
+    lf.score_feedback(request_id=request_id, rating=rating, comment=comment)
     return {"ok": True, "id": fid, "requestId": request_id, "rating": rating}
 
 

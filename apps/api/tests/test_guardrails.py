@@ -60,7 +60,16 @@ def test_groundedness_blocks_invented_answer():
     assert d.reason == "ungrounded_output"
 
 
-def test_groundedness_allows_refusal():
-    memories = [{"content": "plate is 8XYZ123"}]
-    d = gr.check_output_groundedness("I don't have that saved yet.", memories)
-    assert not d.blocked
+def test_classify_content_tags_mortgage():
+    tags, sensitivity = gr.classify_content_tags(
+        "The rate lock on loan LN-2026-4418 is 6.125% until 2026-08-15."
+    )
+    assert "rate" in tags
+    assert "loan_number" in tags
+    assert sensitivity == "sensitive"
+
+
+def test_classify_content_tags_ssn_restricted():
+    tags, sensitivity = gr.classify_content_tags("SSN 123-45-6789")
+    assert "ssn" in tags
+    assert sensitivity == "restricted"

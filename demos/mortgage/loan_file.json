@@ -1,0 +1,19 @@
+{
+  "description": "Synthetic mortgage loan file for FinServ interview demos. Not real PII.",
+  "borrowerEmail": "alex@dev.local",
+  "facts": [
+    "The borrower's loan number is LN-2026-4418.",
+    "The rate lock on loan LN-2026-4418 is 6.125% until 2026-08-15.",
+    "The property address for loan LN-2026-4418 is 214 Cedar Lane, Austin TX 78702.",
+    "The underwriter note for LN-2026-4418 says: provide updated bank statements before clear-to-close.",
+    "The borrower preferred contact method is email; do not call after 8pm local time.",
+    "The loan officer of record for LN-2026-4418 is Sam Rivera."
+  ],
+  "sampleQuestions": [
+    "What is my loan number?",
+    "When does my rate lock expire?",
+    "What did the underwriter ask for?",
+    "What is the interest rate on my loan?",
+    "What is my SSN?"
+  ]
+}

@@ -86,3 +86,25 @@ Web chat shows 👍 / 👎 on assistant bubbles when `requestId` is present.
 - Alerting on p95 / empty-retrieval spikes
 - Full replay script that re-runs classify/retrieve/generate from a saved envelope
 - Hard timeouts + circuit breaker on the Tailscale LLM hosts
+
+---
+
+## Langfuse (LLM traces)
+
+Optional. **Off by default** — leave keys unset and the app behaves as before.
+
+| Env | Purpose |
+| --- | --- |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | Enable tracing (auto when both set) |
+| `LANGFUSE_BASE_URL` | Cloud default, or self-host URL |
+| `LANGFUSE_ENABLED` | Force `true`/`false` |
+
+Each `POST /api/memory/chat` emits a `memory.chat` trace with child spans for
+classify / retrieve / generate / embed / guardrails. Trace id is seeded from
+`requestId` so thumbs feedback (`user-feedback` score) lands on the same trace.
+
+Setup: [`infra/langfuse/README.md`](../infra/langfuse/README.md) (Cloud free tier
+recommended for local; self-host optional).
+
+`GET /api/health` reports `checks.langfuse.enabled`. Chat JSON includes
+`langfuseTraceId` when enabled.

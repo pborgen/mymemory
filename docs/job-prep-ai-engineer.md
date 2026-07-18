@@ -420,12 +420,15 @@ availability if product policy allows — and log every block with `request_id`.
 
 **Goal:** Domain language + compliance story. **Synthetic data only.**
 
+**Status: implemented in-repo.** Demo: [`demos/mortgage/`](../demos/mortgage/).
+Notes: [`docs/mortgage-demo.md`](mortgage-demo.md).
+
 ### Steps
 
-1. Synthetic “loan file” corpus (rate lock, loan number, borrower prefs, underwriter notes).
-2. Seed memories; chat as loan officer / borrower assistant.
-3. Tighten prompts: cite sources, refuse when not in memory, never invent rates/IDs.
-4. Lightweight governance (pick 2–3):
+1. Synthetic “loan file” corpus (rate lock, loan number, borrower prefs, underwriter notes). ✅
+2. Seed memories; chat as loan officer / borrower assistant. ✅ (`seed.py`)
+3. Tighten prompts: cite sources, refuse when not in memory, never invent rates/IDs. ✅ (guardrails + grounded prompts)
+4. Lightweight governance (pick 2–3): ✅
    - `pii_tags` / sensitivity flag
    - append-only **audit log** (who stored/recalled what)
    - retention / soft-delete policy documented
@@ -445,20 +448,24 @@ availability if product policy allows — and log every block with `request_id`.
 
 **Goal:** Close Snowflake / Glue / S3 gaps with mapped local equivalents.
 
+**Status: implemented in-repo (local-friendly defaults).**  
+Pipeline: [`pipelines/`](../pipelines/). Map: [`docs/data-architecture.md`](data-architecture.md).  
+Landing zone: `data/raw/` (no MinIO/AWS required). Warehouse: JSONL + `GET /api/memory/report`.
+
 | JD skill | Local / cheap stand-in | What you say |
 | --- | --- | --- |
-| S3 lake | MinIO or `./data/raw` | Landing zone, immutable raw |
-| Glue / ETL | Polars / DuckDB / Python | Extract → clean → stage → load |
-| Snowflake | Local tables or free Snowflake trial | Facts + lineage columns |
-| Lambda | CLI / cron / background task | Embed-on-ingest |
+| S3 lake | **`./data/raw`** (MinIO optional) | Landing zone, immutable raw |
+| Glue / ETL | Python chunk + ingest CLI | Extract → clean → stage → load |
+| Snowflake | Postgres report API + `facts.jsonl` | Facts + lineage columns |
+| Lambda | CLI / cron / background task | Embed-on-ingest via local API |
 | SageMaker (later) | Your vLLM endpoint story | Serving without claiming SM expertise |
 
 ### Steps
 
-1. Ingest docs → chunk → embed → `memories` (+ optional warehouse table).
-2. Lineage: `source_uri`, `ingested_at`, `pipeline_version`.
-3. Reporting query: facts for loan X / PII-tagged memories.
-4. One-pager: map to S3 + Glue + Snowflake + Bedrock-backed API.
+1. Ingest docs → chunk → embed → `memories` (+ warehouse JSONL). ✅
+2. Lineage: `source_uri`, `ingested_at`, `pipeline_version`. ✅
+3. Reporting query: facts for loan X / PII-tagged memories. ✅ (`report.py`, `/api/memory/report`)
+4. One-pager: map to S3 + Glue + Snowflake + Bedrock-backed API. ✅
 
 ### Artifact
 

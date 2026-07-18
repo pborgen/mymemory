@@ -1,0 +1,6 @@
+# Pipeline stage / warehouse outputs (local S3 / Snowflake stand-ins)
+stage/*
+!stage/.gitkeep
+warehouse/*
+!warehouse/.gitkeep
+# Keep committed sample raw docs under raw/

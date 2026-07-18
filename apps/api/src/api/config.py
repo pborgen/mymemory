@@ -67,3 +67,20 @@ EMBED_API_KEY: str = os.getenv("EMBED_API_KEY", "not-needed")
 # Titan Bedrock model id when EMBED_PROVIDER=bedrock).
 EMBED_MODEL_ID: str = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBED_DIM: int = int(os.getenv("EMBED_DIM", "1024"))
+
+# ── Langfuse (optional LLM observability) ─────────────────
+# Local-friendly: leave keys unset and tracing is a no-op. Set keys from
+# Langfuse Cloud (free) or a self-hosted instance (see docs/observability.md).
+LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "").strip()
+LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "").strip()
+LANGFUSE_BASE_URL: str = os.getenv(
+    "LANGFUSE_BASE_URL", "https://cloud.langfuse.com"
+).rstrip("/")
+_langfuse_flag = os.getenv("LANGFUSE_ENABLED", "").strip().lower()
+if _langfuse_flag in ("0", "false", "no", "off"):
+    LANGFUSE_ENABLED: bool = False
+elif _langfuse_flag in ("1", "true", "yes", "on"):
+    LANGFUSE_ENABLED = bool(LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY)
+else:
+    # Auto-enable when both keys are present.
+    LANGFUSE_ENABLED = bool(LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY)

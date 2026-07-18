@@ -145,3 +145,31 @@ def check_output_groundedness(answer: str, memories: list[dict]) -> GuardDecisio
     if any(t in blob for t in contentful):
         return GuardDecision(False)
     return GuardDecision(True, "ungrounded_output", REFUSAL_UNGROUNDED)
+
+
+def classify_content_tags(text: str) -> tuple[list[str], str]:
+    """Return (pii_tags, sensitivity) for governance tagging on store.
+
+    Heuristic tags for mortgage/FinServ demos — not a full classifier.
+    """
+    lowered = (text or "").lower()
+    tags: list[str] = []
+    if _SSN_RE.search(text or ""):
+        tags.append("ssn")
+    digits = re.sub(r"[^\d]", "", text or "")
+    if len(digits) >= 13 and _PAN_RE.search(text or ""):
+        tags.append("payment_card")
+    if any(k in lowered for k in ("loan number", "loan #", "loan id", "loan no")) or re.search(
+        r"\bloan\s+ln[-\s]?\d|\bln-\d{4}-\d+\b", lowered
+    ):
+        tags.append("loan_number")
+    if any(k in lowered for k in ("rate lock", "interest rate", "apr", "mortgage rate")):
+        tags.append("rate")
+    if any(k in lowered for k in ("underwriter", "underwriting", "conditions")):
+        tags.append("underwriting")
+    if any(k in lowered for k in ("borrower", "applicant", "co-borrower")):
+        tags.append("borrower")
+    sensitivity = "sensitive" if tags else "normal"
+    if "ssn" in tags or "payment_card" in tags:
+        sensitivity = "restricted"
+    return tags, sensitivity

@@ -148,6 +148,7 @@ async def _wipe_test_rows(db_module) -> None:
     pool = db_module.pool()
     await pool.execute("DELETE FROM chat_feedback WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM chat_metrics WHERE email LIKE $1", like)
+    await pool.execute("DELETE FROM memory_audit_log WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM memory_chat_history WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM memories WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM profiles WHERE email LIKE $1", like)

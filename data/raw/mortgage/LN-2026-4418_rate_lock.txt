@@ -1,0 +1,9 @@
+Loan file notes — LN-2026-4418 (synthetic demo data, not real PII)
+
+Rate lock
+The rate lock on loan LN-2026-4418 is 6.125% until 2026-08-15.
+Interest rate terms were confirmed by the lock desk on 2026-07-01.
+
+Property
+The property address for loan LN-2026-4418 is 214 Cedar Lane, Austin TX 78702.
+Occupancy type is primary residence.
