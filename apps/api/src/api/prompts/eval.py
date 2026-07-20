@@ -64,6 +64,21 @@ CLASSIFIER_CASES: list[dict[str, Any]] = [
         "message": "what is my wifi password",
         "expect_action": "recall",
     },
+    {
+        "id": "chat-hello",
+        "message": "Hello, how can I assist you today?",
+        "expect_action": "chat",
+    },
+    {
+        "id": "chat-hi",
+        "message": "hi",
+        "expect_action": "chat",
+    },
+    {
+        "id": "chat-thanks",
+        "message": "thanks!",
+        "expect_action": "chat",
+    },
 ]
 
 ANSWER_CASES: list[dict[str, Any]] = [

@@ -98,6 +98,34 @@ async def seed_prompts() -> None:
             """,
             version_id, d["key"], d["content"], "Initial seed",
         )
+    await _ensure_remember_gate_classifier()
+
+
+async def _ensure_remember_gate_classifier() -> None:
+    """Activate the 3-way store|recall|chat classifier if still on the old 2-way prompt.
+
+    Does not overwrite custom edits that already include a chat action.
+    """
+    key = "memory.classifier"
+    current = await get_active_resolved(key)
+    if not current:
+        return
+    content = current["content"] or ""
+    if '"chat"' in content and "durable" in content.lower():
+        return
+    new_content = DEFAULTS_BY_KEY[key]["content"]
+    if content.strip() == new_content.strip():
+        return
+    await save_version(
+        key,
+        new_content,
+        by="system",
+        change_note="Remember-gate: only store durable facts; chat skips memory",
+        activate=True,
+    )
+    from . import store as prompt_store
+
+    await prompt_store.invalidate(key)
 
 
 def _prompt_row(r: asyncpg.Record) -> dict:

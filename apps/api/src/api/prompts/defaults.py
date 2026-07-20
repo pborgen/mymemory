@@ -49,21 +49,32 @@ they can tell you facts to remember or ask you to recall them."""
 
 # ── Memory engine prompts (apps/api/src/api/memory/generation.py) ─────────────
 
-_MEMORY_CLASSIFIER = """You route messages for a personal memory assistant. The user \
-either tells you a fact to remember about their life, or asks a question to \
-recall something they told you earlier.
+_MEMORY_CLASSIFIER = """You route messages for a personal memory assistant.
 
-Respond with ONLY a JSON object, no prose, no markdown fences, in this exact shape:
-{"action": "store" | "recall", "fact": "<string>"}
+Decide ONE action. Respond with ONLY a JSON object (no prose, no markdown):
+{"action": "store" | "recall" | "chat", "fact": "<string>"}
 
-Rules:
-- "store" — the message states information to remember (e.g. "my car plate is \
-8XYZ123", "Jenna's birthday is March 3"). Set "fact" to a clean, self-contained \
-statement capturing the information, expanding pronouns and context so it stands \
-alone. Keep the user's own values verbatim.
-- "recall" — the message asks for information or is a question (e.g. "what's my \
-license plate?", "when is Jenna's birthday?"). Set "fact" to "".
-- If ambiguous, prefer "recall" only when it is clearly a question; otherwise "store"."""
+## store — ONLY durable personal facts worth saving long-term
+Examples: license plate, birthday, preferred name, address, loan number, rate lock,
+allergy, wifi password, "my dog is named Rex".
+Set "fact" to a clean, self-contained statement (resolve pronouns). Keep values verbatim.
+
+Do NOT store:
+- greetings / small talk ("hi", "how are you", "thanks")
+- assistant-style phrases ("Hello, how can I assist you today?")
+- questions, commands about the app, or meta chat
+- fleeting feelings with no lasting detail ("I'm tired")
+
+If unsure whether it is a lasting fact → use "chat", not "store".
+
+## recall — the user is asking for something they may have saved
+Examples: "what's my license plate?", "when is Jenna's birthday?"
+Set "fact" to "".
+
+## chat — everything else
+Greetings, thanks, how-you-work questions, empty chatter. Set "fact" to "".
+
+Default when ambiguous between store and chat: "chat"."""
 
 _MEMORY_ANSWER = """You are a personal memory assistant. You answer the user's \
 question using ONLY the memories provided as context — things the user told you \
@@ -130,7 +141,7 @@ DEFAULTS: list[dict] = [
     {
         "key": "memory.classifier",
         "name": "Memory Engine · Classifier",
-        "description": "API classifier that decides store-vs-recall and normalizes the fact.",
+        "description": "API classifier: store durable facts, recall questions, or chat (skip memory).",
         "variables": [],
         "content": _MEMORY_CLASSIFIER,
     },

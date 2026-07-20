@@ -17,6 +17,7 @@ import uuid
 
 from . import db
 from . import guardrails as gr
+from . import remember_gate as rg
 from .embeddings import embed
 from .generation import classify_and_normalize, generate_answer
 from .retrieval import retrieve_relevant_memories
@@ -241,9 +242,9 @@ async def _handle_message_traced(
         timings["total"] = total.stop()
         with lf.observation(
             root,
-            name="guardrail.input",
+            name="block-input",
             as_type="guardrail",
-            input={"message": message},
+            input=[{"role": "user", "content": message}],
             metadata={"reason": inbound.reason},
         ) as g:
             lf.update_observation(
@@ -251,7 +252,10 @@ async def _handle_message_traced(
             )
         lf.update_observation(
             root,
-            output={"action": "blocked", "guardrail": inbound.reason},
+            output=[
+                {"role": "assistant", "content": inbound.message},
+            ],
+            metadata={"action": "blocked", "guardrail": inbound.reason},
         )
         obs.log_event(
             "guardrail.blocked",
@@ -280,19 +284,73 @@ async def _handle_message_traced(
     ]
 
     t = obs.Timer()
+    # Cheap pre-filter: never call the classifier for obvious chitchat.
+    if rg.is_obvious_chat(message):
+        timings["classify"] = t.stop()
+        timings["total"] = total.stop()
+        lf.update_observation(
+            root,
+            output=[{"role": "assistant", "content": rg.CHAT_REPLY}],
+            metadata={"action": "chat", "reason": "obvious_chat"},
+        )
+        return await _finish(
+            email=email,
+            session_id=session_id,
+            message=message,
+            answer=rg.CHAT_REPLY,
+            action="chat",
+            sources=[],
+            request_id=request_id,
+            prompt_versions=prompt_versions,
+            timings=timings,
+            empty_retrieval=False,
+            memory_ids=[],
+        )
+
     classifier = await prompt_store.resolve_active("memory.classifier")
     prompt_versions = {"memory.classifier": _pin(classifier)}
-    with lf.observation(
-        root,
-        name="classify",
-        as_type="generation",
-        model=lf.gen_model_name(),
-        input={"message": message},
-        metadata={"promptVersion": prompt_versions["memory.classifier"]},
-    ) as gen:
-        route = await classify_and_normalize(message, classifier["content"])
-        lf.update_observation(gen, output=route)
+    # OpenAI drop-in auto-creates a generation; avoid a duplicate manual span.
+    if lf.uses_openai_generation_integration():
+        route = await classify_and_normalize(
+            message, classifier["content"], observation_name="classify-intent"
+        )
+    else:
+        with lf.observation(
+            root,
+            name="classify-intent",
+            as_type="generation",
+            model=lf.gen_model_name(),
+            input=[{"role": "user", "content": message}],
+            metadata={"promptVersion": prompt_versions["memory.classifier"]},
+        ) as gen:
+            route = await classify_and_normalize(
+                message, classifier["content"], observation_name="classify-intent"
+            )
+            lf.update_observation(gen, output=route)
     timings["classify"] = t.stop()
+
+    route = rg.resolve_route(message, route)
+
+    if route["action"] == "chat":
+        timings["total"] = total.stop()
+        lf.update_observation(
+            root,
+            output=[{"role": "assistant", "content": rg.CHAT_REPLY}],
+            metadata={"action": "chat"},
+        )
+        return await _finish(
+            email=email,
+            session_id=session_id,
+            message=message,
+            answer=rg.CHAT_REPLY,
+            action="chat",
+            sources=[],
+            request_id=request_id,
+            prompt_versions=prompt_versions,
+            timings=timings,
+            empty_retrieval=False,
+            memory_ids=[],
+        )
 
     if route["action"] == "store" and route["fact"]:
         # ── Store PII policy ──────────────────────────────────────────
@@ -301,14 +359,15 @@ async def _handle_message_traced(
             timings["total"] = total.stop()
             with lf.observation(
                 root,
-                name="guardrail.pii",
+                name="block-pii-store",
                 as_type="guardrail",
                 metadata={"reason": pii.reason},
             ) as g:
                 lf.update_observation(g, output={"blocked": True})
             lf.update_observation(
                 root,
-                output={"action": "blocked", "guardrail": pii.reason},
+                output=[{"role": "assistant", "content": pii.message}],
+                metadata={"action": "blocked", "guardrail": pii.reason},
             )
             obs.log_event(
                 "guardrail.blocked",
@@ -337,10 +396,11 @@ async def _handle_message_traced(
             fact = re_sub_confirm(fact)
         with lf.observation(
             root,
-            name="embed.store",
+            name="embed-memory",
             as_type="embedding",
             model=lf.embed_model_name(),
-            input={"fact": fact},
+            input={"text": fact},
+            metadata={"source": source},
         ) as emb:
             stored = await store_fact(email, fact, source)
             lf.update_observation(
@@ -357,11 +417,8 @@ async def _handle_message_traced(
         timings["total"] = total.stop()
         lf.update_observation(
             root,
-            output={
-                "action": "stored",
-                "memoryIds": memory_ids,
-                "answer": answer,
-            },
+            output=[{"role": "assistant", "content": answer}],
+            metadata={"action": "stored", "memoryIds": memory_ids},
         )
         return await _finish(
             email=email,
@@ -381,7 +438,7 @@ async def _handle_message_traced(
     t = obs.Timer()
     with lf.observation(
         root,
-        name="retrieve",
+        name="retrieve-context",
         as_type="retriever",
         input={"query": message, "topK": 6},
         metadata={"minSimilarity": config.RETRIEVAL_MIN_SIMILARITY},
@@ -408,13 +465,14 @@ async def _handle_message_traced(
         timings["total"] = total.stop()
         with lf.observation(
             root,
-            name="guardrail.empty_retrieval",
+            name="block-empty-retrieval",
             as_type="guardrail",
         ) as g:
             lf.update_observation(g, output={"blocked": True})
         lf.update_observation(
             root,
-            output={"action": "blocked", "guardrail": "empty_retrieval"},
+            output=[{"role": "assistant", "content": gr.REFUSAL_NO_MEMORY}],
+            metadata={"action": "blocked", "guardrail": "empty_retrieval"},
         )
         obs.log_event(
             "guardrail.blocked",
@@ -440,21 +498,37 @@ async def _handle_message_traced(
     t = obs.Timer()
     answer_prompt = await prompt_store.resolve_active("memory.answer")
     prompt_versions["memory.answer"] = _pin(answer_prompt)
-    with lf.observation(
-        root,
-        name="generate",
-        as_type="generation",
-        model=lf.gen_model_name(),
-        input={"query": message, "memoryCount": len(memories)},
-        metadata={"promptVersion": prompt_versions["memory.answer"]},
-    ) as gen:
+    if lf.uses_openai_generation_integration():
         result = await generate_answer(
-            message, memories, history, answer_prompt["content"]
+            message,
+            memories,
+            history,
+            answer_prompt["content"],
+            observation_name="generate-response",
         )
-        lf.update_observation(
-            gen,
-            output={"answer": result["answer"], "sources": result["sources"]},
-        )
+    else:
+        with lf.observation(
+            root,
+            name="generate-response",
+            as_type="generation",
+            model=lf.gen_model_name(),
+            input=[{"role": "user", "content": message}],
+            metadata={
+                "promptVersion": prompt_versions["memory.answer"],
+                "memoryCount": len(memories),
+            },
+        ) as gen:
+            result = await generate_answer(
+                message,
+                memories,
+                history,
+                answer_prompt["content"],
+                observation_name="generate-response",
+            )
+            lf.update_observation(
+                gen,
+                output=[{"role": "assistant", "content": result["answer"]}],
+            )
     timings["generate"] = t.stop()
     answer, sources = result["answer"], result["sources"]
 
@@ -469,7 +543,7 @@ async def _handle_message_traced(
         )
         with lf.observation(
             root,
-            name="guardrail.groundedness",
+            name="block-ungrounded-output",
             as_type="guardrail",
             metadata={"reason": grounded.reason},
         ) as g:
@@ -485,9 +559,9 @@ async def _handle_message_traced(
     timings["total"] = total.stop()
     lf.update_observation(
         root,
-        output={
+        output=[{"role": "assistant", "content": answer}],
+        metadata={
             "action": action,
-            "answer": answer,
             "memoryIds": memory_ids,
             "guardrail": guardrail or None,
         },

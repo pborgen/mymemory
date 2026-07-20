@@ -38,21 +38,32 @@ def _flatten(system: str, messages: list[dict]) -> list[dict]:
         chat.append({"role": m["role"], "content": text})
     return chat
 
-_ROUTER_SYSTEM = """You route messages for a personal memory assistant. The user \
-either tells you a fact to remember about their life, or asks a question to \
-recall something they told you earlier.
+_ROUTER_SYSTEM = """You route messages for a personal memory assistant.
 
-Respond with ONLY a JSON object, no prose, no markdown fences, in this exact shape:
-{"action": "store" | "recall", "fact": "<string>"}
+Decide ONE action. Respond with ONLY a JSON object (no prose, no markdown):
+{"action": "store" | "recall" | "chat", "fact": "<string>"}
 
-Rules:
-- "store" — the message states information to remember (e.g. "my car plate is \
-8XYZ123", "Jenna's birthday is March 3"). Set "fact" to a clean, self-contained \
-statement capturing the information, expanding pronouns and context so it stands \
-alone. Keep the user's own values verbatim.
-- "recall" — the message asks for information or is a question (e.g. "what's my \
-license plate?", "when is Jenna's birthday?"). Set "fact" to "".
-- If ambiguous, prefer "recall" only when it is clearly a question; otherwise "store"."""
+## store — ONLY durable personal facts worth saving long-term
+Examples: license plate, birthday, preferred name, address, loan number, rate lock,
+allergy, wifi password, "my dog is named Rex".
+Set "fact" to a clean, self-contained statement (resolve pronouns). Keep values verbatim.
+
+Do NOT store:
+- greetings / small talk ("hi", "how are you", "thanks")
+- assistant-style phrases ("Hello, how can I assist you today?")
+- questions, commands about the app, or meta chat
+- fleeting feelings with no lasting detail ("I'm tired")
+
+If unsure whether it is a lasting fact → use "chat", not "store".
+
+## recall — the user is asking for something they may have saved
+Examples: "what's my license plate?", "when is Jenna's birthday?"
+Set "fact" to "".
+
+## chat — everything else
+Greetings, thanks, how-you-work questions, empty chatter. Set "fact" to "".
+
+Default when ambiguous between store and chat: "chat"."""
 
 _ANSWER_SYSTEM = """You are a personal memory assistant. You answer the user's \
 question using ONLY the memories provided as context — things the user told you \
@@ -71,7 +82,7 @@ and briefly suggest they tell you so you can remember it.
 _CLASSIFY_SCHEMA = {
     "type": "object",
     "properties": {
-        "action": {"type": "string", "enum": ["store", "recall"]},
+        "action": {"type": "string", "enum": ["store", "recall", "chat"]},
         "fact": {"type": "string"},
     },
     "required": ["action", "fact"],
@@ -85,6 +96,8 @@ def _converse(
     max_tokens: int,
     temperature: float,
     json_schema: dict | None = None,
+    *,
+    observation_name: str | None = None,
 ) -> str:
     """One chat round-trip; returns the assistant's text. Dispatches on
     config.GEN_PROVIDER. `messages` use the Bedrock Converse shape. When
@@ -92,34 +105,62 @@ def _converse(
     that support it (openai/vLLM, ollama); bedrock falls back to prompt-only.
     """
     if config.GEN_PROVIDER == "openai":
-        return _openai_converse(system, messages, max_tokens, temperature, json_schema)
+        return _openai_converse(
+            system,
+            messages,
+            max_tokens,
+            temperature,
+            json_schema,
+            observation_name=observation_name,
+        )
     if config.GEN_PROVIDER == "ollama":
         return _ollama_converse(system, messages, max_tokens, temperature, json_schema)
     return _bedrock_converse(system, messages, max_tokens, temperature)
 
 
+def _openai_client():
+    """OpenAI-compatible client; Langfuse drop-in when tracing is enabled."""
+    from .. import langfuse_tracing as lf
+
+    if lf.enabled():
+        from langfuse.openai import OpenAI
+    else:
+        from openai import OpenAI
+
+    return OpenAI(
+        base_url=config.OPENAI_BASE_URL,
+        api_key=config.OPENAI_API_KEY,
+        timeout=120.0,
+    )
+
+
 def _openai_converse(
-    system: str, messages: list[dict], max_tokens: int, temperature: float,
+    system: str,
+    messages: list[dict],
+    max_tokens: int,
+    temperature: float,
     json_schema: dict | None = None,
+    *,
+    observation_name: str | None = None,
 ) -> str:
-    body: dict = {
+    """Chat via OpenAI SDK (Langfuse-wrapped when enabled → tokens/cost auto)."""
+    kwargs: dict = {
         "model": config.OPENAI_CHAT_MODEL,
         "messages": _flatten(system, messages),
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
     if json_schema is not None:
-        # vLLM's guided-decoding extension: forces schema-valid JSON output.
-        body["guided_json"] = json_schema
-        body["response_format"] = {"type": "json_object"}
-    response = httpx.post(
-        f"{config.OPENAI_BASE_URL}/chat/completions",
-        headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
-        json=body,
-        timeout=120,
-    )
-    response.raise_for_status()
-    return (response.json()["choices"][0]["message"]["content"] or "").strip()
+        # vLLM guided decoding — not part of the OpenAI schema, so use extra_body.
+        kwargs["response_format"] = {"type": "json_object"}
+        kwargs["extra_body"] = {"guided_json": json_schema}
+    if observation_name:
+        # Langfuse OpenAI wrapper uses `name` for the generation observation.
+        kwargs["name"] = observation_name
+    client = _openai_client()
+    response = client.chat.completions.create(**kwargs)
+    content = response.choices[0].message.content if response.choices else ""
+    return (content or "").strip()
 
 
 def _ollama_converse(
@@ -155,13 +196,16 @@ def _bedrock_converse(system: str, messages: list[dict], max_tokens: int, temper
     return "".join(p.get("text", "") for p in parts).strip()
 
 
-def _classify_sync(message: str, system: str) -> dict:
+def _classify_sync(
+    message: str, system: str, *, observation_name: str = "classify-intent"
+) -> dict:
     text = _converse(
         system,
         [{"role": "user", "content": [{"text": message}]}],
         max_tokens=400,
         temperature=0.0,
         json_schema=_CLASSIFY_SCHEMA,
+        observation_name=observation_name,
     )
     # Models occasionally wrap JSON in ```json fences; strip them.
     if text.startswith("```"):
@@ -169,19 +213,41 @@ def _classify_sync(message: str, system: str) -> dict:
     try:
         data = json.loads(text)
         action = data.get("action")
-        if action not in ("store", "recall"):
+        if action not in ("store", "recall", "chat"):
             raise ValueError("bad action")
         return {"action": action, "fact": (data.get("fact") or "").strip()}
     except Exception:
-        # Fall back to recall so we never silently swallow a real question.
-        return {"action": "recall", "fact": ""}
+        # Prefer recall for questions; otherwise chat — never invent a store.
+        q = message.strip()
+        if q.endswith("?") or q.lower().split(" ", 1)[0] in {
+            "what", "when", "where", "who", "how", "which", "why",
+        }:
+            return {"action": "recall", "fact": ""}
+        return {"action": "chat", "fact": ""}
 
 
-async def classify_and_normalize(message: str, system: str | None = None) -> dict:
-    return await asyncio.to_thread(_classify_sync, message, system or _ROUTER_SYSTEM)
+async def classify_and_normalize(
+    message: str,
+    system: str | None = None,
+    *,
+    observation_name: str = "classify-intent",
+) -> dict:
+    return await asyncio.to_thread(
+        _classify_sync,
+        message,
+        system or _ROUTER_SYSTEM,
+        observation_name=observation_name,
+    )
 
 
-def _answer_sync(query: str, memories: list[dict], history: list[dict], system: str) -> dict:
+def _answer_sync(
+    query: str,
+    memories: list[dict],
+    history: list[dict],
+    system: str,
+    *,
+    observation_name: str = "generate-response",
+) -> dict:
     context_block = "\n".join(
         f"- {m['content']} (saved {m['createdAt']:%Y-%m-%d})"
         if hasattr(m.get("createdAt"), "strftime")
@@ -208,7 +274,13 @@ def _answer_sync(query: str, memories: list[dict], history: list[dict], system: 
         }
     )
 
-    answer = _converse(system, messages, max_tokens=1024, temperature=0.2)
+    answer = _converse(
+        system,
+        messages,
+        max_tokens=1024,
+        temperature=0.2,
+        observation_name=observation_name,
+    )
     sources = [
         {"id": m["id"], "content": m["content"], "similarity": m["similarity"]}
         for m in memories
@@ -217,8 +289,18 @@ def _answer_sync(query: str, memories: list[dict], history: list[dict], system: 
 
 
 async def generate_answer(
-    query: str, memories: list[dict], history: list[dict] | None = None, system: str | None = None
+    query: str,
+    memories: list[dict],
+    history: list[dict] | None = None,
+    system: str | None = None,
+    *,
+    observation_name: str = "generate-response",
 ) -> dict:
     return await asyncio.to_thread(
-        _answer_sync, query, memories, history or [], system or _ANSWER_SYSTEM
+        _answer_sync,
+        query,
+        memories,
+        history or [],
+        system or _ANSWER_SYSTEM,
+        observation_name=observation_name,
     )

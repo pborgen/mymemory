@@ -64,13 +64,19 @@ _QUESTION_STARTS = (
 
 
 async def fake_classify_and_normalize(message: str, system: str | None = None) -> dict:
-    """Cheap store-vs-recall heuristic standing in for the classifier LLM."""
+    """Cheap store/recall/chat heuristic standing in for the classifier LLM."""
+    from api.memory import remember_gate as rg
+
     text = message.strip()
     lowered = text.lower()
+    if rg.is_obvious_chat(text):
+        return {"action": "chat", "fact": ""}
     is_question = text.endswith("?") or lowered.split(" ", 1)[0] in _QUESTION_STARTS
     if is_question:
         return {"action": "recall", "fact": ""}
-    return {"action": "store", "fact": text}
+    if rg.looks_like_durable_fact(text):
+        return {"action": "store", "fact": text}
+    return {"action": "chat", "fact": ""}
 
 
 async def fake_generate_answer(

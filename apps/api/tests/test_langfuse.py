@@ -21,7 +21,9 @@ def test_langfuse_disabled_without_keys(monkeypatch):
         source="chat",
     ) as root:
         assert root is None
-        with lf.observation(root, name="classify", as_type="generation") as child:
+        with lf.observation(
+            root, name="classify-intent", as_type="generation"
+        ) as child:
             assert child is None
     lf.score_feedback(request_id="00000000-0000-0000-0000-000000000001", rating=1)
 
@@ -33,3 +35,10 @@ def test_trace_id_deterministic_from_request_id():
     assert a == b
     assert len(a) == 32
     assert a != c
+
+
+def test_mask_data_redacts_ssn_and_card():
+    assert "[REDACTED_SSN]" in lf.mask_data("SSN 123-45-6789")
+    assert "[REDACTED_CARD]" in lf.mask_data("card 4111 1111 1111 1111")
+    nested = lf.mask_data({"note": "ssn 123-45-6789"})
+    assert nested["note"] == "ssn [REDACTED_SSN]"

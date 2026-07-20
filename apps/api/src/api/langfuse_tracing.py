@@ -1,18 +1,19 @@
 """Optional Langfuse tracing for memory chat (local-friendly).
 
-Disabled by default until keys are set — the API keeps working with only the
-existing request_id / chat_metrics path. When enabled, each chat turn becomes
-a Langfuse trace (seeded from our request_id so thumbs feedback can score it).
+Follows Langfuse skill / best-practice guidance:
+  - one trace per chat turn; session_id groups conversation
+  - verb-first stable observation names
+  - correct as_type (chain / generation / retriever / embedding / guardrail)
+  - PII masking before export
+  - environment separation (development vs production)
+  - user-thumbs scores seeded from request_id
 
-Env:
-  LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY  — required to enable
-  LANGFUSE_BASE_URL                          — default https://cloud.langfuse.com
-                                               (self-host: http://localhost:3100)
-  LANGFUSE_ENABLED                           — force on/off; default = keys present
+Disabled until keys are set — request_id / chat_metrics still work alone.
 """
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import contextmanager, nullcontext
 from typing import Any, Iterator
 
@@ -22,9 +23,26 @@ _log = logging.getLogger("api.langfuse")
 _client = None
 _client_checked = False
 
+_SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+_PAN_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
+
 
 def enabled() -> bool:
     return config.LANGFUSE_ENABLED
+
+
+def mask_data(data: Any, **_: Any) -> Any:
+    """Redact SSN / payment-card shaped strings before they leave the process."""
+    if isinstance(data, str):
+        out = _SSN_RE.sub("[REDACTED_SSN]", data)
+        return _PAN_RE.sub("[REDACTED_CARD]", out)
+    if isinstance(data, dict):
+        return {k: mask_data(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [mask_data(v) for v in data]
+    if isinstance(data, tuple):
+        return tuple(mask_data(v) for v in data)
+    return data
 
 
 def trace_id_for_request(request_id: str) -> str:
@@ -50,9 +68,13 @@ def get_client():
             secret_key=config.LANGFUSE_SECRET_KEY,
             base_url=config.LANGFUSE_BASE_URL,
             tracing_enabled=True,
+            environment=config.LANGFUSE_TRACING_ENVIRONMENT,
+            mask=mask_data,
         )
         _log.info(
-            "Langfuse tracing enabled (base_url=%s)", config.LANGFUSE_BASE_URL
+            "Langfuse tracing enabled (base_url=%s env=%s)",
+            config.LANGFUSE_BASE_URL,
+            config.LANGFUSE_TRACING_ENVIRONMENT,
         )
     except Exception as exc:
         _log.warning("Langfuse init failed; continuing without traces: %s", exc)
@@ -93,6 +115,11 @@ def embed_model_name() -> str:
     return config.EMBED_MODEL_ID
 
 
+def uses_openai_generation_integration() -> bool:
+    """True when OpenAI drop-in will auto-create generation observations."""
+    return enabled() and config.GEN_PROVIDER == "openai"
+
+
 @contextmanager
 def chat_trace(
     *,
@@ -102,7 +129,7 @@ def chat_trace(
     message: str,
     source: str,
 ) -> Iterator[Any]:
-    """Root observation for one memory.chat turn. Yields span or None."""
+    """Root observation for one chat turn. Yields span or None."""
     client = get_client()
     if client is None:
         yield None
@@ -111,14 +138,17 @@ def chat_trace(
     from langfuse import propagate_attributes
 
     tid = trace_id_for_request(request_id)
+    # Trace-level I/O: user message only (not full function args / secrets).
+    root_input = [{"role": "user", "content": message}]
     try:
         with client.start_as_current_observation(
-            name="memory.chat",
+            name="memory-chat",
             as_type="chain",
             trace_context={"trace_id": tid},
-            input={"message": message, "source": source},
+            input=root_input,
             metadata={
                 "requestId": request_id,
+                "source": source,
                 "genProvider": config.GEN_PROVIDER,
                 "embedProvider": config.EMBED_PROVIDER,
             },
@@ -126,9 +156,9 @@ def chat_trace(
             with propagate_attributes(
                 user_id=email,
                 session_id=session_id,
-                metadata={"requestId": request_id},
-                tags=["memory", "rag"],
-                trace_name="memory.chat",
+                metadata={"requestId": request_id, "source": source},
+                tags=["memory-chat", "rag", f"source:{source}"],
+                trace_name="memory-chat",
             ):
                 yield root
     except Exception as exc:
@@ -187,7 +217,7 @@ def score_feedback(
         return
     try:
         client.create_score(
-            name="user-feedback",
+            name="user-thumbs",
             value=1 if rating > 0 else 0,
             data_type="BOOLEAN",
             trace_id=trace_id_for_request(request_id),
@@ -199,5 +229,4 @@ def score_feedback(
         _log.warning("Langfuse score_feedback failed: %s", exc)
 
 
-# Re-export nullcontext for callers that want an explicit disabled span.
 disabled_span = nullcontext

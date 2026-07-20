@@ -84,3 +84,8 @@ elif _langfuse_flag in ("1", "true", "yes", "on"):
 else:
     # Auto-enable when both keys are present.
     LANGFUSE_ENABLED = bool(LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY)
+
+# Separate test/dev traces from production dashboards (Langfuse environments).
+LANGFUSE_TRACING_ENVIRONMENT: str = (
+    os.getenv("LANGFUSE_TRACING_ENVIRONMENT", "development").strip() or "development"
+)

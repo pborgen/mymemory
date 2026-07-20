@@ -16,10 +16,13 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
 3. Restart the API (`🐍 API (FastAPI :8099)` or `npm run api:dev`).
-4. Send a chat turn → open Langfuse Traces → look for `memory.chat`.
-5. Thumbs up/down in the UI scores the same trace (`user-feedback`).
+4. Send a chat turn → open Langfuse Traces → look for `memory-chat`.
+5. Thumbs up/down in the UI scores the same trace (`user-thumbs`).
 
 No Docker, no conflict with Next.js `:3000` or Postgres `:5544`.
+
+Optional: `LANGFUSE_TRACING_ENVIRONMENT=development` (default) keeps local
+traces out of production dashboards.
 
 ## Optional: self-host with Docker Compose
 
@@ -43,10 +46,13 @@ LANGFUSE_SECRET_KEY=...
 
 | Observation | Type |
 | --- | --- |
-| `memory.chat` | chain (root; trace id seeded from `requestId`) |
-| `classify` / `generate` | generation |
-| `retrieve` | retriever |
-| `embed.store` | embedding |
-| guardrails | guardrail |
+| `memory-chat` | chain (root; trace id seeded from `requestId`) |
+| `classify-intent` / `generate-response` | generation |
+| `retrieve-context` | retriever |
+| `embed-memory` | embedding |
+| `block-*` | guardrail |
+
+Agent skill (best practices): installed from `langfuse/skills` at
+`.agents/skills/langfuse`.
 
 See `docs/observability.md`.

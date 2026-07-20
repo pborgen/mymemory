@@ -99,12 +99,23 @@ Optional. **Off by default** — leave keys unset and the app behaves as before.
 | `LANGFUSE_BASE_URL` | Cloud default, or self-host URL |
 | `LANGFUSE_ENABLED` | Force `true`/`false` |
 
-Each `POST /api/memory/chat` emits a `memory.chat` trace with child spans for
-classify / retrieve / generate / embed / guardrails. Trace id is seeded from
-`requestId` so thumbs feedback (`user-feedback` score) lands on the same trace.
+Each `POST /api/memory/chat` emits a `memory-chat` chain with nested observations:
 
-Setup: [`infra/langfuse/README.md`](../infra/langfuse/README.md) (Cloud free tier
-recommended for local; self-host optional).
+| Name | Type |
+| --- | --- |
+| `memory-chat` | chain (root; session + user + tags) |
+| `classify-intent` / `generate-response` | generation (OpenAI drop-in when `GEN_PROVIDER=openai`) |
+| `retrieve-context` | retriever |
+| `embed-memory` | embedding |
+| `block-*` | guardrail |
+
+Trace id is seeded from `requestId` so thumbs map to score `user-thumbs`.
+PII-shaped strings are masked before export. Set
+`LANGFUSE_TRACING_ENVIRONMENT` (`development` default) so local traces stay
+out of production dashboards.
+
+Setup: [`infra/langfuse/README.md`](../infra/langfuse/README.md). Cursor skill:
+`.agents/skills/langfuse` (symlink under `.cursor/skills/langfuse`).
 
 `GET /api/health` reports `checks.langfuse.enabled`. Chat JSON includes
 `langfuseTraceId` when enabled.

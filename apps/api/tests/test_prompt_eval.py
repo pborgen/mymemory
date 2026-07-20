@@ -12,6 +12,8 @@ def _fake_llm(monkeypatch):
     """Deterministic stand-ins so eval tests never hit a remote model."""
 
     async def fake_classify(message: str, system: str | None = None) -> dict:
+        from api.memory import remember_gate as rg
+
         text = message.strip()
         lowered = text.lower()
         is_q = text.endswith("?") or lowered.split(" ", 1)[0] in {
@@ -20,6 +22,8 @@ def _fake_llm(monkeypatch):
         # A deliberately broken candidate prompt is detected via a marker string.
         if system and "BREAK_CLASSIFIER" in system:
             return {"action": "store", "fact": "broken"}
+        if rg.is_obvious_chat(text):
+            return {"action": "chat", "fact": ""}
         if is_q:
             return {"action": "recall", "fact": ""}
         return {"action": "store", "fact": text}
