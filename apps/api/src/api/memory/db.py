@@ -119,6 +119,36 @@ async def ensure_memory_tables() -> None:
         "ON memory_audit_log (email, created_at DESC)"
     )
 
+    await _execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_entities (
+          id         UUID PRIMARY KEY,
+          email      TEXT NOT NULL REFERENCES profiles(email),
+          name       TEXT NOT NULL,
+          key        TEXT NOT NULL,
+          type       TEXT NOT NULL DEFAULT 'other',
+          created_at TIMESTAMPTZ DEFAULT now(),
+          UNIQUE (email, key)
+        )
+        """
+    )
+    await _execute(
+        "CREATE INDEX IF NOT EXISTS idx_memory_entities_email ON memory_entities (email)"
+    )
+    await _execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_entity_links (
+          memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          entity_id UUID NOT NULL REFERENCES memory_entities(id) ON DELETE CASCADE,
+          PRIMARY KEY (memory_id, entity_id)
+        )
+        """
+    )
+    await _execute(
+        "CREATE INDEX IF NOT EXISTS idx_memory_entity_links_entity "
+        "ON memory_entity_links (entity_id)"
+    )
+
 
 def _memory_row(r: asyncpg.Record, *, include_similarity: bool = False) -> dict:
     out = {
@@ -131,9 +161,23 @@ def _memory_row(r: asyncpg.Record, *, include_similarity: bool = False) -> dict:
         "ingestedAt": r["ingested_at"],
         "pipelineVersion": r["pipeline_version"] or "",
         "createdAt": r["created_at"],
+        "entities": [],
     }
     if include_similarity:
         out["similarity"] = float(r["similarity"])
+    return out
+
+
+def _entity_row(r: asyncpg.Record) -> dict:
+    out = {
+        "id": str(r["id"]),
+        "name": r["name"],
+        "key": r["key"],
+        "type": r["type"],
+        "createdAt": r["created_at"],
+    }
+    if "memory_count" in r:
+        out["memoryCount"] = int(r["memory_count"])
     return out
 
 
@@ -187,20 +231,268 @@ async def insert_memory(
         "sensitivity": sensitivity,
         "sourceUri": uri,
         "pipelineVersion": version,
+        "entities": [],
     }
 
 
-async def list_memories(email: str) -> list[dict]:
+async def list_memories(email: str, *, entity_key: str = "") -> list[dict]:
+    if entity_key:
+        rows = await _fetch(
+            """
+            SELECT m.id, m.content, m.source, m.pii_tags, m.sensitivity,
+                   m.source_uri, m.ingested_at, m.pipeline_version, m.created_at
+            FROM memories m
+            JOIN memory_entity_links l ON l.memory_id = m.id
+            JOIN memory_entities e ON e.id = l.entity_id
+            WHERE m.email = $1 AND m.deleted_at IS NULL
+              AND e.email = $1 AND e.key = $2
+            ORDER BY m.created_at DESC
+            """,
+            email,
+            entity_key,
+        )
+    else:
+        rows = await _fetch(
+            f"""
+            SELECT {_MEMORY_COLS}
+            FROM memories
+            WHERE email = $1 AND deleted_at IS NULL
+            ORDER BY created_at DESC
+            """,
+            email,
+        )
+    memories = [_memory_row(r) for r in rows]
+    await _attach_entities(email, memories)
+    return memories
+
+
+async def upsert_entity(
+    id: str,
+    email: str,
+    *,
+    name: str,
+    key: str,
+    entity_type: str = "other",
+) -> dict:
+    row = await _fetchrow(
+        """
+        INSERT INTO memory_entities (id, email, name, key, type)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (email, key) DO UPDATE
+          SET name = EXCLUDED.name,
+              type = EXCLUDED.type
+        RETURNING id, name, key, type, created_at
+        """,
+        id,
+        email,
+        name,
+        key,
+        entity_type,
+    )
+    assert row is not None
+    return _entity_row(row)
+
+
+async def link_memory_entity(memory_id: str, entity_id: str) -> None:
+    await _execute(
+        """
+        INSERT INTO memory_entity_links (memory_id, entity_id)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+        """,
+        memory_id,
+        entity_id,
+    )
+
+
+async def memory_owned(email: str, memory_id: str) -> bool:
+    row = await _fetchrow(
+        """
+        SELECT 1 FROM memories
+        WHERE email = $1 AND id = $2 AND deleted_at IS NULL
+        """,
+        email,
+        memory_id,
+    )
+    return row is not None
+
+
+async def unlink_memory_entity(email: str, memory_id: str, entity_id: str) -> bool:
+    """Remove a link; delete the entity if it has no remaining live memories."""
+    result = await _execute(
+        """
+        DELETE FROM memory_entity_links l
+        USING memories m, memory_entities e
+        WHERE l.memory_id = m.id AND l.entity_id = e.id
+          AND m.email = $1 AND m.id = $2 AND e.email = $1 AND e.id = $3
+        """,
+        email,
+        memory_id,
+        entity_id,
+    )
+    # asyncpg returns e.g. "DELETE 1"
+    if not result.endswith("1"):
+        return False
+    await _execute(
+        """
+        DELETE FROM memory_entities e
+        WHERE e.email = $1 AND e.id = $2
+          AND NOT EXISTS (
+            SELECT 1 FROM memory_entity_links l
+            JOIN memories m ON m.id = l.memory_id
+            WHERE l.entity_id = e.id AND m.deleted_at IS NULL
+          )
+        """,
+        email,
+        entity_id,
+    )
+    return True
+
+
+async def entities_for_memory(email: str, memory_id: str) -> list[dict]:
     rows = await _fetch(
-        f"""
-        SELECT {_MEMORY_COLS}
-        FROM memories
-        WHERE email = $1 AND deleted_at IS NULL
-        ORDER BY created_at DESC
+        """
+        SELECT e.id, e.name, e.key, e.type, e.created_at
+        FROM memory_entity_links l
+        JOIN memory_entities e ON e.id = l.entity_id
+        JOIN memories m ON m.id = l.memory_id
+        WHERE m.email = $1 AND m.id = $2 AND m.deleted_at IS NULL AND e.email = $1
+        ORDER BY e.name ASC
+        """,
+        email,
+        memory_id,
+    )
+    return [_entity_row(r) for r in rows]
+
+
+async def rename_entity(
+    email: str, entity_id: str, *, name: str, key: str, entity_type: str | None = None
+) -> dict | None:
+    """Rename an entity. If key collides with another, merge links into that one."""
+    existing = await _fetchrow(
+        """
+        SELECT id, name, key, type, created_at FROM memory_entities
+        WHERE email = $1 AND id = $2
+        """,
+        email,
+        entity_id,
+    )
+    if not existing:
+        return None
+
+    conflict = await _fetchrow(
+        """
+        SELECT id FROM memory_entities
+        WHERE email = $1 AND key = $2 AND id <> $3
+        """,
+        email,
+        key,
+        entity_id,
+    )
+    if conflict:
+        # Move all links to the conflict target, drop the old entity.
+        await _execute(
+            """
+            INSERT INTO memory_entity_links (memory_id, entity_id)
+            SELECT memory_id, $1 FROM memory_entity_links WHERE entity_id = $2
+            ON CONFLICT DO NOTHING
+            """,
+            str(conflict["id"]),
+            entity_id,
+        )
+        await _execute(
+            "DELETE FROM memory_entity_links WHERE entity_id = $1", entity_id
+        )
+        await _execute(
+            "DELETE FROM memory_entities WHERE email = $1 AND id = $2", email, entity_id
+        )
+        row = await _fetchrow(
+            """
+            UPDATE memory_entities
+               SET name = $3, type = COALESCE($4, type)
+             WHERE email = $1 AND id = $2
+         RETURNING id, name, key, type, created_at
+            """,
+            email,
+            str(conflict["id"]),
+            name,
+            entity_type,
+        )
+        return _entity_row(row) if row else None
+
+    row = await _fetchrow(
+        """
+        UPDATE memory_entities
+           SET name = $3, key = $4, type = COALESCE($5, type)
+         WHERE email = $1 AND id = $2
+     RETURNING id, name, key, type, created_at
+        """,
+        email,
+        entity_id,
+        name,
+        key,
+        entity_type,
+    )
+    return _entity_row(row) if row else None
+
+
+async def list_entities(email: str) -> list[dict]:
+    rows = await _fetch(
+        """
+        SELECT e.id, e.name, e.key, e.type, e.created_at,
+               COUNT(m.id)::int AS memory_count
+        FROM memory_entities e
+        LEFT JOIN memory_entity_links l ON l.entity_id = e.id
+        LEFT JOIN memories m
+          ON m.id = l.memory_id AND m.email = e.email AND m.deleted_at IS NULL
+        WHERE e.email = $1
+        GROUP BY e.id, e.name, e.key, e.type, e.created_at
+        HAVING COUNT(m.id) > 0
+        ORDER BY COUNT(m.id) DESC, e.name ASC
         """,
         email,
     )
-    return [_memory_row(r) for r in rows]
+    return [_entity_row(r) for r in rows]
+
+
+async def list_memory_ids_without_entities(
+    email: str, *, limit: int = 25
+) -> list[tuple[str, str]]:
+    rows = await _fetch(
+        """
+        SELECT m.id, m.content
+        FROM memories m
+        LEFT JOIN memory_entity_links l ON l.memory_id = m.id
+        WHERE m.email = $1 AND m.deleted_at IS NULL AND l.memory_id IS NULL
+        ORDER BY m.created_at DESC
+        LIMIT $2
+        """,
+        email,
+        limit,
+    )
+    return [(str(r["id"]), r["content"]) for r in rows]
+
+
+async def _attach_entities(email: str, memories: list[dict]) -> None:
+    if not memories:
+        return
+    ids = [m["id"] for m in memories]
+    rows = await _fetch(
+        """
+        SELECT l.memory_id, e.id, e.name, e.key, e.type, e.created_at
+        FROM memory_entity_links l
+        JOIN memory_entities e ON e.id = l.entity_id
+        WHERE e.email = $1 AND l.memory_id = ANY($2::uuid[])
+        ORDER BY e.name ASC
+        """,
+        email,
+        ids,
+    )
+    by_mem: dict[str, list[dict]] = {mid: [] for mid in ids}
+    for r in rows:
+        by_mem[str(r["memory_id"])].append(_entity_row(r))
+    for m in memories:
+        m["entities"] = by_mem.get(m["id"], [])
 
 
 async def list_memories_for_report(

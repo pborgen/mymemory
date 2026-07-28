@@ -58,11 +58,20 @@ export interface ChatResponse {
   >;
 }
 
+export interface MemoryEntity {
+  id: string;
+  name: string;
+  key: string;
+  type: string;
+  memoryCount?: number;
+}
+
 export interface Memory {
   id: string;
   content: string;
   source: string;
   createdAt: string;
+  entities?: MemoryEntity[];
 }
 
 export interface Prompt {

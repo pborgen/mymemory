@@ -6,6 +6,7 @@ import type {
   ChatResponse,
   DevAccount,
   Memory,
+  MemoryEntity,
   Profile,
   Prompt,
   PromptVersion,
@@ -42,10 +43,12 @@ export function persistAuth(auth: AuthState | null): void {
 
 function authHeaders(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cachedAuth?.devMode) {
-    h["x-user-email"] = cachedAuth.email;
-  } else if (cachedAuth?.idToken) {
-    h["Authorization"] = `Bearer ${cachedAuth.idToken}`;
+  // Re-read localStorage if the in-memory cache was cleared (e.g. HMR).
+  const auth = cachedAuth ?? loadAuth();
+  if (auth?.devMode) {
+    h["x-user-email"] = auth.email;
+  } else if (auth?.idToken) {
+    h["Authorization"] = `Bearer ${auth.idToken}`;
   }
   return h;
 }
@@ -88,12 +91,41 @@ export const sendMemoryChat = (message: string, sessionId?: string, source = "we
   apiFetch<ChatResponse>("POST", "/api/memory/chat", { message, sessionId, source });
 
 // Memories
-export const fetchMemories = () => apiFetch<Memory[]>("GET", "/api/memory");
+export const fetchMemories = (entityKey?: string) => {
+  const q = entityKey ? `?entity=${encodeURIComponent(entityKey)}` : "";
+  return apiFetch<Memory[]>("GET", `/api/memory${q}`);
+};
+export const fetchMemoryEntities = () =>
+  apiFetch<MemoryEntity[]>("GET", "/api/memory/entities");
 export const createMemory = (content: string) =>
   apiFetch<{ ok: boolean; memory: Memory }>("POST", "/api/memory", { content });
 export const deleteMemory = (id: string) =>
   apiFetch<{ ok: boolean }>("DELETE", `/api/memory/${id}`);
-
+export const addMemoryEntity = (
+  memoryId: string,
+  name: string,
+  type: string = "other",
+) =>
+  apiFetch<{ ok: boolean; entity: MemoryEntity; entities: MemoryEntity[] }>(
+    "POST",
+    `/api/memory/${memoryId}/entities`,
+    { name, type },
+  );
+export const removeMemoryEntity = (memoryId: string, entityId: string) =>
+  apiFetch<{ ok: boolean; entities: MemoryEntity[] }>(
+    "DELETE",
+    `/api/memory/${memoryId}/entities/${entityId}`,
+  );
+export const renameMemoryEntity = (
+  entityId: string,
+  name: string,
+  type?: string,
+) =>
+  apiFetch<{ ok: boolean; entity: MemoryEntity }>(
+    "PATCH",
+    `/api/memory/entities/${entityId}`,
+    type ? { name, type } : { name },
+  );
 // Managed prompts
 export const fetchPrompts = () => apiFetch<Prompt[]>("GET", "/api/prompts");
 export const fetchPrompt = (key: string) =>

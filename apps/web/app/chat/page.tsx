@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { sendMemoryChat, submitChatFeedback } from "@/api";
+import { sendMemoryChat } from "@/api";
 import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import type { ChatMessage } from "@/types";
@@ -126,23 +126,12 @@ export default function Chat() {
 
 function Bubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
   const tag =
     message.action === "stored"
       ? "✓ Stored"
       : message.action === "recalled"
         ? "↩ Recalled"
         : null;
-
-  const sendFeedback = async (rating: 1 | -1) => {
-    if (!message.requestId || feedback) return;
-    try {
-      await submitChatFeedback(message.requestId, rating);
-      setFeedback(rating === 1 ? "up" : "down");
-    } catch {
-      /* ignore — feedback is best-effort */
-    }
-  };
 
   return (
     <div className={`bubble ${isUser ? "user" : "bot"}`}>
@@ -153,29 +142,6 @@ function Bubble({ message }: { message: ChatMessage }) {
           {message.sources.map((s) => (
             <div key={s.id}>• {s.content}</div>
           ))}
-        </div>
-      )}
-      {!isUser && message.requestId && (
-        <div className="sources" style={{ marginTop: 8 }}>
-          <button
-            type="button"
-            onClick={() => void sendFeedback(1)}
-            disabled={!!feedback}
-            style={{ marginRight: 8, opacity: feedback === "up" ? 1 : 0.7 }}
-          >
-            👍
-          </button>
-          <button
-            type="button"
-            onClick={() => void sendFeedback(-1)}
-            disabled={!!feedback}
-            style={{ opacity: feedback === "down" ? 1 : 0.7 }}
-          >
-            👎
-          </button>
-          <span className="meta" style={{ marginLeft: 8, fontSize: 11 }}>
-            {message.requestId.slice(0, 8)}…
-          </span>
         </div>
       )}
     </div>

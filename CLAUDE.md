@@ -38,23 +38,27 @@ Monorepo with npm workspaces:
 - **AI:** Pluggable model providers, configured independently for generation and
   embeddings (`GEN_PROVIDER` / `EMBED_PROVIDER` — each one of `openai` /
   `ollama` / `bedrock`; see `apps/api/src/api/config.py`).
-  - **Where the models run (current local/dev setup):** both live on a **remote
-    GPU box (`paul-System-Product-Name`) reached over Tailscale at
-    `100.99.15.47`**, not on the API host.
-    - *Generation:* an OpenAI-compatible **vLLM** server at
-      `http://100.99.15.47:8001/v1` (`OPENAI_BASE_URL`).
-    - *Embeddings:* **Ollama** at `http://100.99.15.47:11434` (`EMBED_BASE_URL`,
-      model `mxbai-embed-large`, 1024-dim). Ollama must be bound to the tailnet
-      (`OLLAMA_HOST=0.0.0.0`) and have the embed model pulled.
-  - Both are reachable only while connected to the Tailscale tailnet; if either
-    host is unreachable, `POST /api/memory/chat` fails at the embed/generate step.
+  - **Where the models run — Mac local (default for laptop dev):** both
+    generation and embeddings on **Ollama on this Mac**
+    (`http://localhost:11434`). Copy `apps/api/.env.mac.example` → `.env`, then
+    `npm run db:up` + `npm run mac:models` + `npm run api:dev`.
+    - *Generation:* `GEN_PROVIDER=ollama`, model `qwen2.5` (or any chat model
+      you `ollama pull`).
+    - *Embeddings:* `EMBED_PROVIDER=ollama`, model `mxbai-embed-large`
+      (1024-dim, matches `VECTOR(1024)`). Already-pulled `nomic-embed-text`
+      works if you set `EMBED_DIM=768` on a fresh DB.
+  - **Alternate — Tailscale GPU box:** generation via **vLLM** at
+    `http://100.99.15.47:8001/v1` (`GEN_PROVIDER=openai`) and embeddings via
+    remote Ollama at `http://100.99.15.47:11434`. Requires Tailscale; if either
+    host is unreachable, `POST /api/memory/chat` fails at embed/generate.
+    Settings are commented in `apps/api/.env` for easy switching.
   - AWS Bedrock (Claude/Nova generation, Amazon Titan embeddings) remains
     available by setting the relevant provider to `bedrock`.
   - **Restarting Ollama on the remote box (`100.99.15.47`, over Tailscale):**
     Ollama is a **user-local install** at `~/.local/bin/ollama` (no `sudo` on
     that host — sudo needs a password) and is **not** a systemd service, so it
-    does **not** survive a reboot. If `POST /api/memory/chat` starts failing at
-    the embed step, SSH in as `paul` and restart it:
+    does **not** survive a reboot. If remote embed fails, SSH in as `paul` and
+    restart it:
     ```bash
     ssh paul@100.99.15.47        # Tailscale SSH; remote user is `paul`
     OLLAMA_HOST=0.0.0.0:11434 setsid nohup ~/.local/bin/ollama serve \
@@ -68,8 +72,12 @@ Monorepo with npm workspaces:
 ## Commands
 
 ```bash
-# From repo root:
+# From repo root (Mac-local):
+npm run db:up          # Postgres + pgvector on :5544 (Docker)
+npm run mac:models     # Ensure local Ollama chat + embed models
+npm run mac:dev        # db:up + mac:models + api:dev
 npm run api:dev        # FastAPI (uvicorn --reload, :8080)
+npm run web:dev        # Next.js web client
 npm run mobile:dev     # Expo dev server
 npm run agent:memory   # Memory agent CLI
 

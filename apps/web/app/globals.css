@@ -575,6 +575,146 @@ section.block {
   padding: 70px 20px;
 }
 
+.entity-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+.entity-chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.entity-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.entity-chip.editing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+.entity-chip.editing input {
+  width: 110px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.entity-chip.editing button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.entity-chip .count {
+  margin-left: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.entity-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.entity-heading {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 12px 0 0;
+  font-weight: 600;
+}
+.entity-inline {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  padding: 0;
+  margin-left: 8px;
+  cursor: pointer;
+}
+.mem-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.edit-rel {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+.mem-row.editing {
+  align-items: flex-start;
+}
+.relation-editor {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.relation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.relation-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.relation-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg);
+}
+.relation-tag button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.relation-add {
+  display: flex;
+  gap: 8px;
+}
+.relation-add input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.relation-add button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--accent);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .spinner {
   width: 26px;
   height: 26px;

@@ -9,25 +9,38 @@ Monorepo:
 - `apps/api` — FastAPI + Postgres/pgvector backend (the memory engine).
 - `apps/mobile` — Expo / React Native iOS app (chat + voice + memories list).
 - `apps/agent` — LangChain `memory` agent CLI (for local testing).
+- `apps/web` — Next.js web client.
 
-## Quick start
+## Quick start (Mac, models on this machine)
+
+Runs Postgres in Docker and chat/embeddings via **local Ollama** (Apple Silicon
+or Intel). No Tailscale GPU box and no AWS required.
 
 ```bash
-# 1. Backend (needs Postgres with pgvector + AWS Bedrock access)
+# Prerequisites: Docker Desktop + Ollama (https://ollama.com or brew install ollama)
+
+# 1. Copy Mac-local API env (or use the committed defaults in .env.example)
 cd apps/api
-cp .env.example .env        # set POSTGRES_URL, AWS_REGION, ALLOW_DEV_AUTH_HEADERS=true
+cp .env.mac.example .env   # skip if .env already points at localhost Ollama
 uv sync
-uv run api                  # http://localhost:8080
 
-# 2. Try it from the CLI
-cd ../agent
-uv sync
-uv run memory               # interactive remember / recall
+# 2. From repo root: Postgres + pull models + API
+cd ../..
+npm run mac:dev            # db:up + mac:models + api:dev → http://localhost:8080
 
-# 3. Mobile app (Expo dev build for voice + Google sign-in)
-cd ../mobile
-npm install
-EXPO_PUBLIC_API_URL=http://localhost:8080 npx expo start
+# Or step by step:
+npm run db:up              # pgvector on localhost:5544
+npm run mac:models         # pulls qwen2.5 + mxbai-embed-large
+npm run api:dev
+
+# 3. Web UI
+npm run web:dev            # http://localhost:3000
+
+# 4. Or CLI agent
+cd apps/agent && uv sync && uv run memory
 ```
+
+Switch back to the remote Tailscale vLLM/Ollama hosts by uncommenting the
+alternate block in `apps/api/.env` (see comments there).
 
 See [CLAUDE.md](CLAUDE.md) for architecture details.

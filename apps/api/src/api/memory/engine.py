@@ -19,6 +19,7 @@ from . import db
 from . import guardrails as gr
 from . import remember_gate as rg
 from .embeddings import embed
+from .entities import link_entities_for_memory
 from .generation import classify_and_normalize, generate_answer
 from .retrieval import retrieve_relevant_memories
 from .. import config
@@ -47,8 +48,9 @@ async def store_fact(
     """Embed and persist a single memory with governance tags (+ optional lineage)."""
     embedding = await embed(fact)
     tags, sensitivity = gr.classify_content_tags(fact)
-    return await db.insert_memory(
-        str(uuid.uuid4()),
+    memory_id = str(uuid.uuid4())
+    stored = await db.insert_memory(
+        memory_id,
         email,
         fact,
         embedding,
@@ -58,6 +60,13 @@ async def store_fact(
         source_uri=source_uri,
         pipeline_version=pipeline_version,
     )
+    try:
+        entities = await link_entities_for_memory(email, memory_id, fact)
+        stored["entities"] = entities
+    except Exception:
+        # Clustering is best-effort — never fail a successful store.
+        stored["entities"] = []
+    return stored
 
 
 async def _finish(

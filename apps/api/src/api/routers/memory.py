@@ -11,8 +11,21 @@ from .. import observability as obs
 from ..memory import db as mem_db
 from ..memory import engine
 from ..memory import guardrails as gr
+from ..memory.entities import (
+    attach_named_entity,
+    backfill_unlinked_memories,
+    detach_entity,
+    rename_entity,
+)
 
 router = APIRouter()
+
+
+async def _maybe_backfill_entities(email: str) -> None:
+    try:
+        await backfill_unlinked_memories(email, limit=25)
+    except Exception:
+        pass
 
 
 def _valid_session_id(value: object) -> str:
@@ -80,8 +93,93 @@ async def memory_audit(email: str = Depends(require_user), limit: int = 50):
 
 
 @router.get("/api/memory")
-async def list_memories(email: str = Depends(require_user)):
-    return await mem_db.list_memories(email)
+async def list_memories(
+    email: str = Depends(require_user),
+    entity: str = "",
+):
+    # Lazily cluster a batch of older memories that predate entity linking.
+    await _maybe_backfill_entities(email)
+    return await mem_db.list_memories(email, entity_key=entity.strip().lower())
+
+
+@router.get("/api/memory/entities")
+async def list_entities(email: str = Depends(require_user)):
+    """Entity clusters for the signed-in user (auto-extracted on store)."""
+    await _maybe_backfill_entities(email)
+    return await mem_db.list_entities(email)
+
+
+@router.patch("/api/memory/entities/{entity_id}")
+async def patch_entity(
+    entity_id: str,
+    body: dict = Body(default={}),
+    email: str = Depends(require_user),
+):
+    """Rename (and optionally retype) an entity across all its memories."""
+    name = (body.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"error": "name required"}, status_code=400)
+    entity_type = body.get("type")
+    updated = await rename_entity(
+        email,
+        entity_id,
+        name=name,
+        entity_type=entity_type if isinstance(entity_type, str) else None,
+    )
+    if not updated:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    await mem_db.write_audit(
+        email,
+        "entity_rename",
+        detail={"entityId": entity_id, "name": updated["name"], "key": updated["key"]},
+    )
+    return {"ok": True, "entity": updated}
+
+
+@router.post("/api/memory/{memory_id}/entities")
+async def add_memory_entity(
+    memory_id: str,
+    body: dict = Body(default={}),
+    email: str = Depends(require_user),
+):
+    """Attach an entity relationship to a memory (creates the entity if needed)."""
+    name = (body.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"error": "name required"}, status_code=400)
+    entity_type = (body.get("type") or "other").strip()
+    linked = await attach_named_entity(
+        email, memory_id, name=name, entity_type=entity_type
+    )
+    if not linked:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    entities = await mem_db.entities_for_memory(email, memory_id)
+    await mem_db.write_audit(
+        email,
+        "entity_link",
+        memory_id=memory_id,
+        detail={"entityId": linked["id"], "name": linked["name"]},
+    )
+    return {"ok": True, "entity": linked, "entities": entities}
+
+
+@router.delete("/api/memory/{memory_id}/entities/{entity_id}")
+async def remove_memory_entity(
+    memory_id: str,
+    entity_id: str,
+    email: str = Depends(require_user),
+):
+    """Detach an entity relationship from a memory."""
+    ok = await detach_entity(email, memory_id, entity_id)
+    if not ok:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    entities = await mem_db.entities_for_memory(email, memory_id)
+    await mem_db.write_audit(
+        email,
+        "entity_unlink",
+        memory_id=memory_id,
+        detail={"entityId": entity_id},
+    )
+    return {"ok": True, "entities": entities}
 
 
 @router.get("/api/memory/report")

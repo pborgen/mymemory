@@ -7,14 +7,26 @@
     "apps/web"
   ],
   "scripts": {
+    "db:up": "bash scripts/db-up.sh",
+    "db:down": "docker stop mymemory-pg 2>/dev/null || docker compose stop postgres",
+    "db:reset": "bash scripts/db-up.sh --reset",
+    "mac:models": "bash scripts/mac-models.sh",
+    "mac:dev": "npm run db:up && npm run mac:models && npm run api:dev",
     "mobile:dev": "npm --workspace apps/mobile run start",
     "web:dev": "npm --workspace apps/web run dev",
     "web:build": "npm --workspace apps/web run build",
-    "api:dev": "cd apps/api && uv run uvicorn api.main:app --reload --port 8080",
+    "api:dev": "cd apps/api && uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8080",
     "api:start": "cd apps/api && uv run api",
     "agent:memory": "cd apps/agent && uv run memory",
     "agent:orchestrator": "cd apps/agent && uv run orchestrator",
     "mcp:dev": "cd apps/mcp && uv run mcp dev src/mymemory_mcp/server.py",
-    "mcp:serve": "cd apps/mcp && uv run mymemory-mcp"
+    "mcp:serve": "cd apps/mcp && uv run mymemory-mcp",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "expo": "~54.0.35",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   }
 }
