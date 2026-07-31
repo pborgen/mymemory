@@ -19,8 +19,11 @@ _google_request = google_requests.Request()
 
 def _verify_google_token(token: str) -> dict | None:
     """Verify a Google ID token; return its payload or None. Synchronous (network)."""
+    audiences = config.GOOGLE_CLIENT_IDS or [config.GOOGLE_CLIENT_ID]
+    if not audiences or not audiences[0]:
+        return None
     info = google_id_token.verify_oauth2_token(
-        token, _google_request, audience=config.GOOGLE_CLIENT_ID
+        token, _google_request, audience=audiences
     )
     return info
 
@@ -29,7 +32,7 @@ async def identify_user(request: Request) -> str | None:
     auth = request.headers.get("authorization", "")
     if auth.startswith("Bearer "):
         token = auth[len("Bearer "):]
-        if not config.GOOGLE_CLIENT_ID:
+        if not config.GOOGLE_CLIENT_IDS:
             return None
         payload = await asyncio.to_thread(_verify_google_token, token)
         return payload.get("email") if payload else None

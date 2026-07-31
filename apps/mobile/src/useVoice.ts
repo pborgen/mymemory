@@ -45,7 +45,7 @@ export function useVoice(onResult: (text: string) => void) {
     const perm = await Module.requestPermissionsAsync();
     if (!perm.granted) return;
     setListening(true);
-    Module.start({ lang: "en-US", interimResults: true, continuous: false });
+    Module.start({ lang: "en-US", interimResults: true, continuous: true });
   }, []);
 
   const stop = useCallback(() => {

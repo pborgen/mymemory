@@ -8,6 +8,7 @@ import { sendMemoryChat } from "@/api";
 import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import type { ChatMessage } from "@/types";
+import { useVoice } from "@/useVoice";
 
 let idSeq = 0;
 const nextId = () => `m${idSeq++}`;
@@ -27,6 +28,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { available: voiceAvailable, listening, toggle, stop } = useVoice(setInput);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/login");
@@ -67,6 +69,7 @@ export default function Chat() {
   const send = () => {
     const text = input.trim();
     if (!text || mutation.isPending) return;
+    if (listening) stop();
     setMessages((prev) => [...prev, { id: nextId(), role: "user", content: text }]);
     setInput("");
     mutation.mutate(text);
@@ -103,14 +106,28 @@ export default function Chat() {
         </div>
 
         <div className="composer">
+          {voiceAvailable ? (
+            <button
+              type="button"
+              className="mic-btn"
+              onClick={toggle}
+              aria-label={listening ? "Stop listening" : "Speak into chat"}
+              aria-pressed={listening}
+              title={listening ? "Stop listening" : "Speak into chat"}
+            >
+              <MicIcon />
+            </button>
+          ) : null}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Tell me or ask me…"
+            placeholder={listening ? "Listening…" : "Tell me or ask me…"}
             rows={1}
+            className={listening ? "listening" : undefined}
           />
           <button
+            type="button"
             className="send-btn"
             onClick={send}
             disabled={!input.trim() || mutation.isPending}
@@ -121,6 +138,24 @@ export default function Chat() {
         </div>
       </div>
     </div>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

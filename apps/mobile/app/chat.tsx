@@ -147,23 +147,35 @@ export default function Chat() {
             borderTopWidth: 1,
           }}
         >
-          {voiceAvailable && (
+          {voiceAvailable ? (
             <Pressable
               onPress={listening ? stop : start}
+              accessibilityRole="button"
+              accessibilityLabel={listening ? "Stop listening" : "Speak into chat"}
+              accessibilityState={{ selected: listening }}
               style={{
                 width: 46,
                 height: 46,
                 borderRadius: 23,
                 backgroundColor: listening ? theme.accent : theme.surface,
-                borderColor: theme.border,
+                borderColor: listening ? theme.accent : theme.border,
                 borderWidth: 1,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 20 }}>{listening ? "⏹" : "🎙"}</Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  letterSpacing: 0.5,
+                  color: listening ? theme.bg : theme.text,
+                }}
+              >
+                {listening ? "STOP" : "MIC"}
+              </Text>
             </Pressable>
-          )}
+          ) : null}
 
           <TextInput
             value={input}

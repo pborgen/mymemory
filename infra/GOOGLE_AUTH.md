@@ -54,6 +54,46 @@ NEXT_PUBLIC_API_URL=https://gapyciuy6q.us-east-1.awsapprunner.com \
 2. Click **Continue with Google**
 3. Chat should work; `GET /api/session` with the Bearer token returns your email
 
+## 5. iPhone / Expo mobile
+
+The mobile login screen uses `expo-auth-session` and posts the Google ID token
+to the same `POST /api/auth/google` endpoint.
+
+1. **Point the app at the AWS API** when building/running:
+
+   ```bash
+   cd apps/mobile
+   EXPO_PUBLIC_API_URL=https://gapyciuy6q.us-east-1.awsapprunner.com npx expo start
+   # or for a native rebuild:
+   EXPO_PUBLIC_API_URL=https://gapyciuy6q.us-east-1.awsapprunner.com npx expo run:ios
+   ```
+
+2. **Create an iOS OAuth client** (required for Simulator / device builds):
+   - Google Cloud Console → Credentials → **OAuth client ID** → type **iOS**
+   - Bundle ID: `com.pborgen.mymemory`
+   - Copy the iOS client ID (`….apps.googleusercontent.com`)
+
+3. **Wire the iOS client into API + app build:**
+
+   ```hcl
+   # infra/terraform.tfvars
+   google_ios_client_id = "YOUR_IOS_ID.apps.googleusercontent.com"
+   ```
+
+   ```bash
+   cd infra && terraform apply
+   # Rebuild native iOS so the reversed client ID URL scheme is in Info.plist:
+   EXPO_PUBLIC_API_URL=https://gapyciuy6q.us-east-1.awsapprunner.com \
+   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=YOUR_IOS_ID.apps.googleusercontent.com \
+     npx expo run:ios --project-dir apps/mobile
+   ```
+
+   The API accepts ID tokens whose `aud` is the web **or** iOS client id.
+   `app.config.ts` adds `com.googleusercontent.apps.<guid>` as a URL scheme
+   when `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` is set at prebuild time.
+
+4. Smoke test: open the app → **Continue with Google** → chat against AWS.
+
 ## Local Mac
 
 Leave `GOOGLE_CLIENT_ID=` empty and `ALLOW_DEV_AUTH_HEADERS=true` in

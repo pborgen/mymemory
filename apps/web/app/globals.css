@@ -562,24 +562,53 @@ section.block { padding: 70px 0; border-top: 1px solid var(--border); }
   transition: border-color 0.15s ease;
 }
 .composer textarea:focus { border-color: var(--accent-2); }
+.composer textarea.listening {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.mic-btn,
 .send-btn {
   height: 50px;
   width: 50px;
   border-radius: 25px;
-  border: none;
-  background: var(--accent);
-  color: var(--ink);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.12s ease, background 0.12s ease;
+  flex-shrink: 0;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
+.mic-btn:hover:not(:disabled),
 .send-btn:hover:not(:disabled) { transform: scale(1.05); }
+.mic-btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+.mic-btn svg,
+.send-btn svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.send-btn {
+  border: none;
+  background: var(--accent);
+  color: var(--ink);
+}
 .send-btn:disabled {
   background: var(--surface);
   color: var(--text-dim);
+  border: 1px solid var(--border);
   cursor: not-allowed;
+}
+@keyframes mic-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
 }
 .thinking { color: var(--accent-2); font-size: 14px; padding: 4px 2px 10px; }
 

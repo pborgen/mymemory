@@ -86,6 +86,12 @@ variable "google_client_id" {
   default     = ""
 }
 
+variable "google_ios_client_id" {
+  description = "Optional Google iOS OAuth client ID (accepted as an extra ID-token audience for the mobile app)."
+  type        = string
+  default     = ""
+}
+
 variable "allow_dev_auth_headers" {
   description = "Enable the x-user-email dev auth bypass (MUST stay false in prod)"
   type        = string

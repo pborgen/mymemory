@@ -35,6 +35,7 @@ async def test_google_auth_missing_credential(client):
 
 async def test_google_auth_not_configured(client, monkeypatch):
     monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "")
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_IDS", [])
     resp = await client.post("/api/auth/google", json={"credential": "abc"})
     assert resp.status_code == 500
     assert resp.json() == {"error": "Google auth not configured"}
@@ -42,7 +43,9 @@ async def test_google_auth_not_configured(client, monkeypatch):
 
 async def test_google_auth_invalid_token(client, monkeypatch):
     # A client id is set, but the credential can't be verified → 401.
-    monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    cid = "test-client-id.apps.googleusercontent.com"
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", cid)
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_IDS", [cid])
     resp = await client.post("/api/auth/google", json={"credential": "not-a-real-token"})
     assert resp.status_code == 401
     assert resp.json() == {"error": "Invalid Google token"}
@@ -54,14 +57,18 @@ async def test_google_auth_invalid_token(client, monkeypatch):
 async def test_auth_config_null_when_unset(client):
     resp = await client.get("/api/auth/config")
     assert resp.status_code == 200
-    assert resp.json() == {"googleClientId": None}
+    assert resp.json() == {"googleClientId": None, "googleIosClientId": None}
 
 
 async def test_auth_config_reports_client_id(client, monkeypatch):
     monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "xyz.apps.googleusercontent.com")
+    monkeypatch.setattr(config, "GOOGLE_IOS_CLIENT_ID", "ios.apps.googleusercontent.com")
     resp = await client.get("/api/auth/config")
     assert resp.status_code == 200
-    assert resp.json() == {"googleClientId": "xyz.apps.googleusercontent.com"}
+    assert resp.json() == {
+        "googleClientId": "xyz.apps.googleusercontent.com",
+        "googleIosClientId": "ios.apps.googleusercontent.com",
+    }
 
 
 # ── GET /api/session ──────────────────────────────────────────────────────

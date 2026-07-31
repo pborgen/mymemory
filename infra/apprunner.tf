@@ -31,6 +31,9 @@ resource "aws_apprunner_service" "main" {
           trimspace(var.super_admin_email) != "" ? {
             SUPER_ADMIN_EMAIL = var.super_admin_email
           } : {},
+          trimspace(var.google_ios_client_id) != "" ? {
+            GOOGLE_IOS_CLIENT_ID = var.google_ios_client_id
+          } : {},
           local.llm_env,
           local.langfuse_enabled ? {
             LANGFUSE_ENABLED             = "true"

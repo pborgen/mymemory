@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { fetchDevAccounts } from "@/api";
 import { useAuth } from "@/auth";
+import { GoogleSignInButton } from "@/GoogleSignIn";
 import { theme } from "@/theme";
 
 export default function Login() {
@@ -44,15 +45,22 @@ export default function Login() {
         </Text>
 
         <View style={{ marginTop: 40 }}>
-          <Text style={{ color: theme.textDim, fontSize: 12, letterSpacing: 2, marginBottom: 12 }}>
-            DEV SIGN-IN
-          </Text>
-          {devAccounts.length === 0 ? (
-            <Text style={{ color: theme.textDim }}>
-              No dev accounts. Start the API with ALLOW_DEV_AUTH_HEADERS=true.
+          <GoogleSignInButton />
+        </View>
+
+        {devAccounts.length > 0 ? (
+          <View style={{ marginTop: 32 }}>
+            <Text
+              style={{
+                color: theme.textDim,
+                fontSize: 12,
+                letterSpacing: 2,
+                marginBottom: 12,
+              }}
+            >
+              DEV SIGN-IN
             </Text>
-          ) : (
-            devAccounts.map((acct) => (
+            {devAccounts.map((acct) => (
               <Pressable
                 key={acct.email}
                 onPress={() => signInDev(acct.email)}
@@ -73,14 +81,9 @@ export default function Login() {
                   {acct.email}
                 </Text>
               </Pressable>
-            ))
-          )}
-        </View>
-
-        <Text style={{ color: theme.textDim, fontSize: 12, marginTop: 28, lineHeight: 18 }}>
-          Google sign-in is wired on the backend (POST /api/auth/google). Add an
-          expo-auth-session Google flow here to enable production login.
-        </Text>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

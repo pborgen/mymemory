@@ -150,6 +150,8 @@ async def client(monkeypatch):
     # Dev auth on, prod Google auth off.
     monkeypatch.setattr(config, "ALLOW_DEV_AUTH_HEADERS", True)
     monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "")
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_IDS", [])
+    monkeypatch.setattr(config, "GOOGLE_IOS_CLIENT_ID", "")
     monkeypatch.setattr(config, "SUPER_ADMIN_EMAIL", "")
     # Fake embeddings are not semantic — disable similarity floor in tests.
     monkeypatch.setattr(config, "RETRIEVAL_MIN_SIMILARITY", 0.0)

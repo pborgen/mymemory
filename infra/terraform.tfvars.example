@@ -37,6 +37,10 @@ llm_backend = "bedrock"
 # Setting this also enables NAT for token verification egress.
 google_client_id = ""
 
+# Optional: iOS OAuth client for the Expo app (bundle com.pborgen.mymemory).
+# API accepts ID tokens whose aud is the web or iOS client id.
+# google_ios_client_id = ""
+
 # Your Google email — seeded as profiles.role=admin on API startup.
 super_admin_email = ""
 

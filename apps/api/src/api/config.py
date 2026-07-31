@@ -9,7 +9,19 @@ load_dotenv()
 
 POSTGRES_URL: str | None = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL")
 PORT: int = int(os.getenv("PORT", "8080"))
-GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+# Primary Web OAuth client (GIS on web + webClientId for mobile id tokens).
+GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+# Optional extra audiences (e.g. iOS OAuth client). Comma-separated.
+# Tokens whose `aud` matches any of GOOGLE_CLIENT_ID + these are accepted.
+_google_extra = os.getenv("GOOGLE_IOS_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_IDS: list[str] = [
+    c
+    for c in [GOOGLE_CLIENT_ID, *(_google_extra.split(",") if _google_extra else [])]
+    if c
+]
+GOOGLE_IOS_CLIENT_ID: str = (
+    _google_extra.split(",")[0].strip() if _google_extra else ""
+)
 ALLOW_DEV_AUTH_HEADERS: bool = os.getenv("ALLOW_DEV_AUTH_HEADERS") == "true"
 
 # Runtime environment. Set to "production" (or "prod") on public AWS so startup

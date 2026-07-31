@@ -71,6 +71,38 @@ async function apiFetch<T>(method: string, path: string, body?: unknown): Promis
   return res.json() as Promise<T>;
 }
 
+export type AuthConfig = {
+  googleClientId: string | null;
+  googleIosClientId: string | null;
+};
+
+export const fetchAuthConfig = (): Promise<AuthConfig> =>
+  fetch(`${API_URL}/api/auth/config`).then(
+    (r) => r.json() as Promise<AuthConfig>,
+  );
+
+export async function exchangeGoogleCredential(
+  credential: string,
+): Promise<{ email: string }> {
+  const res = await fetch(`${API_URL}/api/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential }),
+  });
+  if (!res.ok) {
+    let message = `API ${res.status}`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data?.error) message = data.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+  const data = (await res.json()) as { email: string };
+  return { email: data.email };
+}
+
 // Dev accounts (only available when the API runs with ALLOW_DEV_AUTH_HEADERS=true)
 export const fetchDevAccounts = (): Promise<DevAccount[]> =>
   fetch(`${API_URL}/api/dev/accounts`).then((r) =>

@@ -29,21 +29,17 @@ async def auth_google(body: dict = Body(default={})):
     credential = body.get("credential")
     if not credential:
         return JSONResponse({"error": "Missing credential"}, status_code=400)
-    if not config.GOOGLE_CLIENT_ID:
+    if not config.GOOGLE_CLIENT_IDS:
         return JSONResponse({"error": "Google auth not configured"}, status_code=500)
     try:
-        from google.auth.transport import requests as google_requests
-        from google.oauth2 import id_token as google_id_token
+        from ..auth import _verify_google_token
 
         payload = await asyncio.wait_for(
-            asyncio.to_thread(
-                google_id_token.verify_oauth2_token,
-                credential,
-                google_requests.Request(),
-                config.GOOGLE_CLIENT_ID,
-            ),
+            asyncio.to_thread(_verify_google_token, credential),
             timeout=12,
         )
+        if not payload:
+            return JSONResponse({"error": "Invalid Google token"}, status_code=401)
         email = payload.get("email")
         if not email:
             return JSONResponse({"error": "No email in token"}, status_code=401)
@@ -60,7 +56,10 @@ async def auth_google(body: dict = Body(default={})):
 
 @router.get("/api/auth/config")
 async def auth_config():
-    return {"googleClientId": config.GOOGLE_CLIENT_ID or None}
+    return {
+        "googleClientId": config.GOOGLE_CLIENT_ID or None,
+        "googleIosClientId": config.GOOGLE_IOS_CLIENT_ID or None,
+    }
 
 
 @router.get("/api/session")
