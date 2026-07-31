@@ -27,8 +27,12 @@ async def test_store_tags_and_audit(client, auth):
 
 
 async def test_soft_delete_and_audit(client, auth):
+    from api import db as app_db
+
+    email = auth["x-user-email"]
+    await app_db.ensure_profile(email)
     stored = await store_fact(
-        auth["x-user-email"],
+        email,
         "Loan officer of record is Sam Rivera.",
         "test",
     )

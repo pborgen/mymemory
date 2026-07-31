@@ -11,4 +11,6 @@ async def test_root_returns_plain_text(client):
 async def test_health_ok(client):
     resp = await client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["checks"]["postgres"]["ok"] is True

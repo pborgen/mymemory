@@ -31,6 +31,19 @@ async def test_rollback_drill_restores_prior_active_and_pins(
         if v["isActive"]
     )
 
+    # Seed memories so recalls hit generation (not empty-retrieval guardrail).
+    for fact in (
+        "My favorite color is blue.",
+        "My wifi password is hunter2.",
+        "My car license plate is 8XYZ123.",
+    ):
+        stored = await client.post(
+            "/api/memory",
+            json={"content": fact, "source": "test"},
+            headers=admin_auth,
+        )
+        assert stored.status_code == 200, stored.text
+
     # Chat once so we know pins work on the baseline.
     recall = await client.post(
         "/api/memory/chat",

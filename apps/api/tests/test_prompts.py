@@ -8,31 +8,8 @@ from __future__ import annotations
 
 import uuid
 
-import pytest_asyncio
-
 # A key that is always seeded (see api.prompts.defaults.DEFAULTS).
 KEY = "memory.answer"
-
-
-@pytest_asyncio.fixture
-async def restore_active(client):
-    """Restore each marked prompt's active version pointer after the test.
-
-    `client` is depended-on so the app lifespan/pool is live for the DB calls.
-    """
-    from api.prompts import db as prompts_db
-
-    saved: dict[str, str] = {}
-
-    async def mark(key: str) -> None:
-        versions = await prompts_db.list_versions(key)
-        active = next(v for v in versions if v["isActive"])
-        saved[key] = active["id"]
-
-    yield mark
-
-    for key, version_id in saved.items():
-        await prompts_db.set_active(key, version_id)
 
 
 # ── GET /api/prompts ──────────────────────────────────────────────────────

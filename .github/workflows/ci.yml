@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   api:
-    name: api (FastAPI + pgvector)
+    name: api (pytest + pgvector)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -31,23 +31,28 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    env:
+      POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/mymemory
+      ALLOW_DEV_AUTH_HEADERS: "true"
+      ENVIRONMENT: development
+      LANGFUSE_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Sync dependencies (locked)
-        run: uv sync --frozen
+      - name: Sync dependencies (locked + dev)
+        run: uv sync --frozen --group dev
       - name: Byte-compile (syntax check)
         run: uv run python -m compileall -q src/api scripts
       - name: Smoke test (schema + pgvector round-trip)
-        env:
-          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/mymemory
         run: uv run python scripts/ci_smoke.py
+      - name: Pytest suite
+        run: uv run pytest -q --tb=short
 
   agent:
-    name: agent (LangChain)
+    name: agent (pytest)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,10 +63,12 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Sync dependencies (locked)
-        run: uv sync --frozen
+      - name: Sync dependencies (locked + dev)
+        run: uv sync --frozen --group dev
       - name: Byte-compile (syntax check)
         run: uv run python -m compileall -q src/agents
+      - name: Pytest suite
+        run: uv run pytest -q --tb=short
 
   mobile:
     name: mobile (Expo / TypeScript)
@@ -78,6 +85,24 @@ jobs:
         run: npm ci
       - name: TypeScript typecheck
         run: npm --workspace apps/mobile run typecheck
+
+  web:
+    name: web (Next.js typecheck)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript typecheck
+        run: npm run typecheck
 
   terraform:
     name: terraform (fmt + validate)

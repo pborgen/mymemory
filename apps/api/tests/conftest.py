@@ -68,7 +68,9 @@ _QUESTION_STARTS = (
 )
 
 
-async def fake_classify_and_normalize(message: str, system: str | None = None) -> dict:
+async def fake_classify_and_normalize(
+    message: str, system: str | None = None, **_kwargs
+) -> dict:
     """Cheap store/recall/chat heuristic standing in for the classifier LLM."""
     from api.memory import remember_gate as rg
 
@@ -89,6 +91,7 @@ async def fake_generate_answer(
     memories: list[dict],
     history: list[dict] | None = None,
     system: str | None = None,
+    **_kwargs,
 ) -> dict:
     """Echo-style answer grounded in the retrieved memories, plus their sources."""
     sources = [
@@ -112,6 +115,28 @@ async def fake_generate_answer(
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture
+async def restore_active(client):
+    """Restore each marked prompt's active version pointer after the test.
+
+    `client` is depended-on so the app lifespan/pool is live for the DB calls.
+    Shared so prompt + rollback-drill tests can both use it.
+    """
+    from api.prompts import db as prompts_db
+
+    saved: dict[str, str] = {}
+
+    async def mark(key: str) -> None:
+        versions = await prompts_db.list_versions(key)
+        active = next(v for v in versions if v["isActive"])
+        saved[key] = active["id"]
+
+    yield mark
+
+    for key, version_id in saved.items():
+        await prompts_db.set_active(key, version_id)
 
 
 @pytest_asyncio.fixture
@@ -161,7 +186,10 @@ async def _wipe_test_rows(db_module) -> None:
     await pool.execute("DELETE FROM chat_metrics WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM memory_audit_log WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM memory_chat_history WHERE email LIKE $1", like)
+    # memories → cascades memory_entity_links via memory_id
     await pool.execute("DELETE FROM memories WHERE email LIKE $1", like)
+    # entities → cascades remaining links; must go before profiles
+    await pool.execute("DELETE FROM memory_entities WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM profiles WHERE email LIKE $1", like)
 
 
