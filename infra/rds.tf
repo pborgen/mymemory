@@ -61,7 +61,7 @@ resource "aws_db_instance" "main" {
   parameter_group_name   = aws_db_parameter_group.main.name
   publicly_accessible    = false
 
-  backup_retention_period    = 7
+  backup_retention_period    = var.db_backup_retention_days
   skip_final_snapshot        = true
   apply_immediately          = true
   auto_minor_version_upgrade = true

@@ -28,3 +28,19 @@ output "apprunner_service_arn" {
   description = "App Runner service ARN (for apprunner:StartDeployment in CI)"
   value       = aws_apprunner_service.main.arn
 }
+
+output "llm_backend" {
+  description = "Active LLM profile: bedrock | home_gpu"
+  value       = var.llm_backend
+}
+
+output "need_nat" {
+  description = "True when NAT is enabled (home_gpu and/or google_client_id)"
+  value       = local.need_nat
+}
+
+output "home_gpu_api_key" {
+  description = "Bearer for Caddy on the GPU box (only when llm_backend=home_gpu)"
+  value       = local.use_home_gpu ? local.home_gpu_api_key_effective : ""
+  sensitive   = true
+}

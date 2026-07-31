@@ -12,6 +12,15 @@ PORT: int = int(os.getenv("PORT", "8080"))
 GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
 ALLOW_DEV_AUTH_HEADERS: bool = os.getenv("ALLOW_DEV_AUTH_HEADERS") == "true"
 
+# Runtime environment. Set to "production" (or "prod") on public AWS so startup
+# refuses unsafe auth/CORS settings. Local/dev leave unset or "development".
+ENVIRONMENT: str = (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "development").strip().lower()
+IS_PRODUCTION: bool = ENVIRONMENT in ("production", "prod")
+
+# Comma-separated browser origins allowed by CORS. Empty → ["*"] (local only).
+# In production this MUST be an explicit list (web App Runner URL, custom domain).
+CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "").strip()
+
 # Super admin email — upserted as profiles.role=admin on API startup. Day-to-day
 # grants for other admins happen in the DB (see /api/admins). Leave blank only
 # if you will set roles via SQL yourself.
@@ -24,6 +33,43 @@ GUARDRAIL_MAX_MESSAGE_CHARS: int = int(os.getenv("GUARDRAIL_MAX_MESSAGE_CHARS", 
 # Drop retrieval hits below this cosine similarity; empty → hard refuse (no generate).
 # Integration tests with fake embeddings set this to 0 via monkeypatch.
 RETRIEVAL_MIN_SIMILARITY: float = float(os.getenv("RETRIEVAL_MIN_SIMILARITY", "0.25"))
+
+# Per-user rate limits on Bedrock-costly endpoints (requests / rolling 60s).
+# Set to 0 to disable (tests). Defaults are generous for humans, hostile to bots.
+RATE_LIMIT_CHAT_PER_MIN: int = int(os.getenv("RATE_LIMIT_CHAT_PER_MIN", "30"))
+RATE_LIMIT_STORE_PER_MIN: int = int(os.getenv("RATE_LIMIT_STORE_PER_MIN", "20"))
+
+
+def cors_origin_list() -> list[str]:
+    """Parse CORS_ORIGINS into a FastAPI allow_origins list."""
+    origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
+    return origins or ["*"]
+
+
+def validate_public_config() -> None:
+    """Refuse to boot a public deployment with spoofable or open auth/CORS.
+
+    Called from the FastAPI lifespan when IS_PRODUCTION is true. Local `api:dev`
+    leaves ENVIRONMENT unset so this is a no-op.
+    """
+    problems: list[str] = []
+    if ALLOW_DEV_AUTH_HEADERS:
+        problems.append(
+            "ALLOW_DEV_AUTH_HEADERS=true — anyone can spoof x-user-email and burn LLM spend"
+        )
+    if not GOOGLE_CLIENT_ID:
+        problems.append(
+            "GOOGLE_CLIENT_ID is empty — no real login path on a public API"
+        )
+    if cors_origin_list() == ["*"]:
+        problems.append(
+            "CORS_ORIGINS is empty/* — set it to your web origin(s), e.g. https://xxx.awsapprunner.com"
+        )
+    if problems:
+        raise RuntimeError(
+            "Unsafe production config:\n  - "
+            + "\n  - ".join(problems)
+        )
 
 # Redis connection string for the shared prompt cache (api.prompts.store). Unset
 # in local dev is fine — the resolver reads straight through to Postgres.

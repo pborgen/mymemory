@@ -17,19 +17,32 @@ resource "aws_apprunner_service" "main" {
       image_configuration {
         port = "8080"
 
-        runtime_environment_variables = {
-          PORT                   = "8080"
-          ALLOW_DEV_AUTH_HEADERS = var.allow_dev_auth_headers
-          GOOGLE_CLIENT_ID       = var.google_client_id
-          # Region + models for the Bedrock-hosted generation + embeddings.
-          AWS_REGION     = var.aws_region
-          RAG_MODEL_ID   = var.rag_model_id
-          EMBED_MODEL_ID = var.embed_model_id
-        }
+        runtime_environment_variables = merge(
+          {
+            PORT                     = "8080"
+            ENVIRONMENT              = var.app_environment
+            ALLOW_DEV_AUTH_HEADERS   = var.allow_dev_auth_headers
+            GOOGLE_CLIENT_ID         = var.google_client_id
+            CORS_ORIGINS             = var.cors_origins
+            RATE_LIMIT_CHAT_PER_MIN  = tostring(var.rate_limit_chat_per_min)
+            RATE_LIMIT_STORE_PER_MIN = tostring(var.rate_limit_store_per_min)
+          },
+          # App Runner drops blank env vars; omit instead of forcing perpetual drift.
+          trimspace(var.super_admin_email) != "" ? {
+            SUPER_ADMIN_EMAIL = var.super_admin_email
+          } : {},
+          local.llm_env,
+        )
 
-        runtime_environment_secrets = {
-          POSTGRES_URL = aws_secretsmanager_secret.postgres_url.arn
-        }
+        runtime_environment_secrets = merge(
+          {
+            POSTGRES_URL = aws_secretsmanager_secret.postgres_url.arn
+          },
+          local.use_home_gpu ? {
+            OPENAI_API_KEY = aws_secretsmanager_secret.home_gpu_api_key[0].arn
+            EMBED_API_KEY  = aws_secretsmanager_secret.home_gpu_api_key[0].arn
+          } : {},
+        )
       }
     }
   }
@@ -65,7 +78,6 @@ resource "aws_apprunner_service" "main" {
     aws_iam_role_policy.apprunner_secrets,
     aws_iam_role_policy.apprunner_bedrock,
     aws_secretsmanager_secret_version.postgres_url,
-    aws_vpc_endpoint.bedrock_runtime,
     aws_db_instance.main,
   ]
 }

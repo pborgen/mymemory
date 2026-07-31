@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import {
   activatePrompt,
@@ -18,10 +18,27 @@ import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import type { PromptEvalReport, PromptVersion } from "@/types";
 
-export default function PromptEditor() {
+// Static-export friendly: key comes from ?key=… (no dynamic [key] segment).
+export default function PromptEditorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="app-shell">
+          <div className="fill-center">
+            <div className="spinner" />
+          </div>
+        </div>
+      }
+    >
+      <PromptEditor />
+    </Suspense>
+  );
+}
+
+function PromptEditor() {
   const router = useRouter();
-  const params = useParams<{ key: string }>();
-  const key = params.key;
+  const searchParams = useSearchParams();
+  const key = (searchParams.get("key") || "").trim();
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
@@ -32,20 +49,23 @@ export default function PromptEditor() {
   const [evalReport, setEvalReport] = useState<PromptEvalReport | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
-    else if (!authLoading && isAuthenticated && !isAdmin) router.replace("/chat");
-  }, [authLoading, isAuthenticated, isAdmin, router]);
+    if (!authLoading && !isAuthenticated) router.replace("/login/");
+    else if (!authLoading && isAuthenticated && !isAdmin) router.replace("/chat/");
+    else if (!authLoading && isAuthenticated && isAdmin && !key) {
+      router.replace("/admin/prompts/");
+    }
+  }, [authLoading, isAuthenticated, isAdmin, key, router]);
 
   const { data: prompt, isLoading } = useQuery({
     queryKey: ["prompt", key],
     queryFn: () => fetchPrompt(key),
-    enabled: isAuthenticated && isAdmin,
+    enabled: isAuthenticated && isAdmin && !!key,
   });
 
   const { data: versions = [] } = useQuery({
     queryKey: ["prompt-versions", key],
     queryFn: () => fetchPromptVersions(key),
-    enabled: isAuthenticated && isAdmin,
+    enabled: isAuthenticated && isAdmin && !!key,
   });
 
   useEffect(() => {
@@ -93,20 +113,15 @@ export default function PromptEditor() {
 
   const runEval = useMutation({
     mutationFn: () => evalPrompt(key, draft ?? ""),
-    onSuccess: (report) => {
-      setEvalReport(report);
-      setError(null);
-    },
+    onSuccess: (r) => setEvalReport(r),
     onError: (e: Error) => setError(e.message),
   });
 
   const activate = useMutation({
     mutationFn: (versionId: string) =>
       activatePrompt(key, versionId, forceReason.trim() || undefined),
-    onSuccess: (p) => {
-      setDraft(p.content);
-      setEvalReport(p.eval ?? null);
-      setError(null);
+    onSuccess: () => {
+      setForceReason("");
       invalidate();
     },
     onError: (e: Error) => setError(e.message),
@@ -114,11 +129,7 @@ export default function PromptEditor() {
 
   const rollback = useMutation({
     mutationFn: (versionId: string) => rollbackPrompt(key, versionId),
-    onSuccess: (p) => {
-      setDraft(p.content);
-      setError(null);
-      invalidate();
-    },
+    onSuccess: () => invalidate(),
     onError: (e: Error) => setError(e.message),
   });
 
@@ -126,13 +137,12 @@ export default function PromptEditor() {
     mutationFn: () => resetPrompt(key),
     onSuccess: (p) => {
       setDraft(p.content);
-      setError(null);
       invalidate();
     },
     onError: (e: Error) => setError(e.message),
   });
 
-  if (authLoading || !isAuthenticated || !isAdmin || isLoading) {
+  if (authLoading || !isAuthenticated || !isAdmin || !key || isLoading) {
     return (
       <div className="app-shell">
         <div className="fill-center">
@@ -148,7 +158,7 @@ export default function PromptEditor() {
         <AppBar active="prompts" />
         <div className="container" style={{ flex: 1 }}>
           <p className="empty">Prompt not found.</p>
-          <Link href="/admin/prompts">← Back to prompts</Link>
+          <Link href="/admin/prompts/">← Back to prompts</Link>
         </div>
       </div>
     );
@@ -169,7 +179,7 @@ export default function PromptEditor() {
       <AppBar active="prompts" />
       <div className="container" style={{ flex: 1 }}>
         <div style={{ paddingTop: 18 }}>
-          <Link href="/admin/prompts" style={{ fontSize: 13 }}>
+          <Link href="/admin/prompts/" style={{ fontSize: 13 }}>
             ← Prompts
           </Link>
           <h1 style={{ fontSize: 22, margin: "8px 0 2px" }}>{prompt.name}</h1>

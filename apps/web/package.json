@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start -p 3000",
+    "export": "next build",
+    "start": "npx --yes serve@14 out -p 3000",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

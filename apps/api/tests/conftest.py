@@ -30,14 +30,19 @@ TEST_EMAIL_DOMAIN = "itest.local"
 
 
 def pytest_collection_modifyitems(config, items):  # noqa: ANN001 - pytest hook
-    """Skip the entire suite when no Postgres is configured."""
+    """Skip DB-backed integration tests when no Postgres is configured.
+
+    Pure unit tests (no `client` / `admin_auth` fixture) still run.
+    """
     if os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL"):
         return
     skip = pytest.mark.skip(
         reason="POSTGRES_URL/DATABASE_URL not set; integration tests need a pgvector Postgres"
     )
     for item in items:
-        item.add_marker(skip)
+        names = set(getattr(item, "fixturenames", ()) or ())
+        if names & {"client", "admin_auth"}:
+            item.add_marker(skip)
 
 
 # ── Fakes for the external model providers ────────────────────────────────

@@ -23,6 +23,8 @@ from .routers import admins, auth, memory, prompts
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     obs.setup_logging()
+    if config.IS_PRODUCTION:
+        config.validate_public_config()
     await db.init_pool()
     await db.ensure_tables()
     await ensure_memory_tables()
@@ -30,7 +32,7 @@ async def lifespan(app: FastAPI):
     await seed_prompts()
     await db.seed_super_admin()
     await obs.ensure_observability_tables()
-    print(f"MyMemory API ready (port {config.PORT})")
+    print(f"MyMemory API ready (port {config.PORT}, env={config.ENVIRONMENT})")
     yield
     await prompt_store.close()
     lf.shutdown()
@@ -39,9 +41,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MyMemory API", lifespan=lifespan)
 
+_cors_origins = config.cors_origin_list()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

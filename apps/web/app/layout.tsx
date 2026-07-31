@@ -1,7 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { Space_Grotesk, Syne } from "next/font/google";
 
 import { Providers } from "@/providers";
 import "./globals.css";
+
+const sans = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const display = Syne({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -21,7 +34,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#14110f",
+  themeColor: "#070b16",
 };
 
 export default function RootLayout({
@@ -30,7 +43,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sans.variable} ${display.variable}`}>
+      <head>
+        {/* Apply the saved theme before first paint to avoid a flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              `try{var t=localStorage.getItem("mymemory_theme");` +
+              `if(t&&t!=="mint")document.documentElement.dataset.theme=t}catch(e){}`,
+          }}
+        />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

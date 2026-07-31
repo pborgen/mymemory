@@ -1,0 +1,17 @@
+# Cloudflare Tunnel — run on the GPU box (100.99.15.47).
+# Docs: infra/home-gpu/README.md
+#
+# Replace TUNNEL_UUID and credentials-file, then:
+#   cloudflared tunnel --config config.yml run
+
+tunnel: TUNNEL_UUID
+credentials-file: /home/paul/.cloudflared/TUNNEL_UUID.json
+
+ingress:
+  # vLLM OpenAI-compatible API (App Runner OPENAI_BASE_URL = https://…/v1)
+  - hostname: mymemory-llm.YOURDOMAIN.com
+    service: http://127.0.0.1:8787
+  # Ollama (App Runner EMBED_BASE_URL = https://…)
+  - hostname: mymemory-embed.YOURDOMAIN.com
+    service: http://127.0.0.1:8788
+  - service: http_status:404

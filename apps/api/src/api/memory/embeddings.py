@@ -26,10 +26,18 @@ def _bedrock_client():
     return boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
 
 
+def _auth_headers(api_key: str) -> dict[str, str]:
+    """Bearer header when a real key is configured (home-GPU Caddy / tunnel)."""
+    key = (api_key or "").strip()
+    if not key or key == "not-needed":
+        return {}
+    return {"Authorization": f"Bearer {key}"}
+
+
 def _embed_openai(text: str) -> list[float]:
     response = httpx.post(
         f"{config.EMBED_BASE_URL}/embeddings",
-        headers={"Authorization": f"Bearer {config.EMBED_API_KEY}"},
+        headers=_auth_headers(config.EMBED_API_KEY),
         json={"model": config.EMBED_MODEL_ID, "input": text},
         timeout=60,
     )
@@ -40,6 +48,7 @@ def _embed_openai(text: str) -> list[float]:
 def _embed_ollama(text: str) -> list[float]:
     response = httpx.post(
         f"{config.EMBED_BASE_URL}/api/embeddings",
+        headers=_auth_headers(config.EMBED_API_KEY),
         json={"model": config.EMBED_MODEL_ID, "prompt": text},
         timeout=60,
     )

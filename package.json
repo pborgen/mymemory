@@ -3,8 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "apps/mobile",
-    "apps/web"
+    "apps/mobile"
   ],
   "scripts": {
     "db:up": "bash scripts/db-up.sh",
@@ -13,8 +12,8 @@
     "mac:models": "bash scripts/mac-models.sh",
     "mac:dev": "npm run db:up && npm run mac:models && npm run api:dev",
     "mobile:dev": "npm --workspace apps/mobile run start",
-    "web:dev": "npm --workspace apps/web run dev",
-    "web:build": "npm --workspace apps/web run build",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
     "api:dev": "cd apps/api && uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8080",
     "api:start": "cd apps/api && uv run api",
     "agent:memory": "cd apps/agent && uv run memory",

@@ -1,9 +1,9 @@
-# ── Web frontend: Next.js (Node SSR) on App Runner ────────
-# A second, public App Runner service serving the Next.js client. It does NOT
-# talk to RDS or Bedrock — the browser calls the API directly — so it needs no
-# VPC connector and no instance role, just the ECR-pull access role.
+# ── Web frontend on App Runner (optional) ─────────────────
+# Preferred prod path is Vercel at memory.informedbydata.com — see DOMAINS.md.
+# Set deploy_web_on_apprunner = true only if you still want this service.
 
 resource "aws_ecr_repository" "web" {
+  count                = var.deploy_web_on_apprunner ? 1 : 0
   name                 = "${var.app_name}-web"
   image_tag_mutability = "MUTABLE"
   force_delete         = true
@@ -14,7 +14,8 @@ resource "aws_ecr_repository" "web" {
 }
 
 resource "aws_ecr_lifecycle_policy" "web" {
-  repository = aws_ecr_repository.web.name
+  count      = var.deploy_web_on_apprunner ? 1 : 0
+  repository = aws_ecr_repository.web[0].name
 
   policy = jsonencode({
     rules = [{
@@ -32,6 +33,7 @@ resource "aws_ecr_lifecycle_policy" "web" {
 }
 
 resource "aws_apprunner_service" "web" {
+  count        = var.deploy_web_on_apprunner ? 1 : 0
   service_name = "${var.app_name}-web"
 
   source_configuration {
@@ -41,7 +43,7 @@ resource "aws_apprunner_service" "web" {
     auto_deployments_enabled = true
 
     image_repository {
-      image_identifier      = "${aws_ecr_repository.web.repository_url}:${var.image_tag}"
+      image_identifier      = "${aws_ecr_repository.web[0].repository_url}:${var.image_tag}"
       image_repository_type = "ECR"
 
       image_configuration {
@@ -69,12 +71,12 @@ resource "aws_apprunner_service" "web" {
   }
 }
 
-output "web_url" {
-  description = "Public HTTPS URL of the Next.js web client"
-  value       = "https://${aws_apprunner_service.web.service_url}"
+output "web_apprunner_url" {
+  description = "App Runner web URL (empty when deploy_web_on_apprunner=false)"
+  value       = var.deploy_web_on_apprunner ? "https://${aws_apprunner_service.web[0].service_url}" : ""
 }
 
 output "web_ecr_repository_url" {
-  description = "ECR repository for the web image"
-  value       = aws_ecr_repository.web.repository_url
+  description = "ECR repository for the optional App Runner web image"
+  value       = var.deploy_web_on_apprunner ? aws_ecr_repository.web[0].repository_url : ""
 }

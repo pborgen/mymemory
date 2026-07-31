@@ -37,8 +37,11 @@ resource "aws_iam_role" "apprunner_instance" {
 
 data "aws_iam_policy_document" "apprunner_secrets" {
   statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.postgres_url.arn]
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = compact(concat(
+      [aws_secretsmanager_secret.postgres_url.arn],
+      local.use_home_gpu ? [aws_secretsmanager_secret.home_gpu_api_key[0].arn] : [],
+    ))
   }
 }
 

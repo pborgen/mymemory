@@ -7,7 +7,9 @@ from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
 from ..auth import require_admin, require_user
+from .. import config
 from .. import observability as obs
+from .. import rate_limit
 from ..memory import db as mem_db
 from ..memory import engine
 from ..memory import guardrails as gr
@@ -19,6 +21,18 @@ from ..memory.entities import (
 )
 
 router = APIRouter()
+
+
+async def require_user_chat_budget(email: str = Depends(require_user)) -> str:
+    """Auth + per-user rate limit for the costly chat path."""
+    await rate_limit.enforce(f"chat:{email}", config.RATE_LIMIT_CHAT_PER_MIN)
+    return email
+
+
+async def require_user_store_budget(email: str = Depends(require_user)) -> str:
+    """Auth + per-user rate limit for direct memory store (embed + entity LLM)."""
+    await rate_limit.enforce(f"store:{email}", config.RATE_LIMIT_STORE_PER_MIN)
+    return email
 
 
 async def _maybe_backfill_entities(email: str) -> None:
@@ -37,7 +51,10 @@ def _valid_session_id(value: object) -> str:
 
 
 @router.post("/api/memory/chat")
-async def memory_chat(body: dict = Body(default={}), email: str = Depends(require_user)):
+async def memory_chat(
+    body: dict = Body(default={}),
+    email: str = Depends(require_user_chat_budget),
+):
     message = (body.get("message") or "").strip()
     if not message:
         return JSONResponse({"error": "Message required"}, status_code=400)
@@ -199,7 +216,10 @@ async def memory_report(
 
 
 @router.post("/api/memory")
-async def create_memory(body: dict = Body(default={}), email: str = Depends(require_user)):
+async def create_memory(
+    body: dict = Body(default={}),
+    email: str = Depends(require_user_store_budget),
+):
     content = (body.get("content") or "").strip()
     if not content:
         return JSONResponse({"error": "Content required"}, status_code=400)

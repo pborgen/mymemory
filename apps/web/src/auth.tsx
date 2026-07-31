@@ -18,6 +18,7 @@ interface AuthContextValue {
   isAdmin: boolean;
   isLoading: boolean;
   signInDev: (email: string) => Promise<void>;
+  signInGoogle: (idToken: string, email: string) => Promise<void>;
   signOut: () => void;
   refreshRole: () => Promise<void>;
 }
@@ -69,6 +70,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applyRole],
   );
 
+  const signInGoogle = useCallback(
+    async (idToken: string, email: string) => {
+      const state: AuthState = {
+        email,
+        idToken,
+        authenticatedAt: new Date().toISOString(),
+      };
+      persistAuth(state);
+      const next = await applyRole(state);
+      setUser(next);
+    },
+    [applyRole],
+  );
+
   const signOut = useCallback(() => {
     persistAuth(null);
     setUser(null);
@@ -89,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin: !!user?.isAdmin,
         isLoading,
         signInDev,
+        signInGoogle,
         signOut,
         refreshRole,
       }}

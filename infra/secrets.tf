@@ -8,5 +8,6 @@ resource "aws_secretsmanager_secret_version" "postgres_url" {
   secret_string = local.postgres_url
 }
 
-# Note: generation (Claude) and embeddings (Titan) both run on AWS Bedrock,
-# IAM-authenticated through the App Runner instance role — no API key secret.
+# Note: when llm_backend=bedrock, generation + embeddings use IAM (instance
+# role) — no model API key secret. when llm_backend=home_gpu, OPENAI_API_KEY /
+# EMBED_API_KEY are injected from aws_secretsmanager_secret.home_gpu_api_key.

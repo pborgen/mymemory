@@ -7,8 +7,10 @@ import type {
   DevAccount,
   Memory,
   MemoryEntity,
+  MetricsSummary,
   Profile,
   Prompt,
+  PromptEvalReport,
   PromptVersion,
 } from "./types";
 
@@ -184,3 +186,31 @@ export const submitChatFeedback = (
     rating,
     comment,
   });
+
+// Auth config + Google credential exchange
+export const fetchAuthConfig = (): Promise<{ googleClientId: string | null }> =>
+  fetch(`${API_URL}/api/auth/config`).then(
+    (r) => r.json() as Promise<{ googleClientId: string | null }>,
+  );
+
+export async function exchangeGoogleCredential(
+  credential: string,
+): Promise<{ email: string }> {
+  const res = await fetch(`${API_URL}/api/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential }),
+  });
+  if (!res.ok) {
+    let message = "Google sign-in failed";
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data?.error) message = data.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+  const data = (await res.json()) as { email: string };
+  return { email: data.email };
+}

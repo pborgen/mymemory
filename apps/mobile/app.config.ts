@@ -18,6 +18,10 @@ const config: ExpoConfig = {
         "MyMemory uses the microphone so you can speak the things you want to remember.",
       NSSpeechRecognitionUsageDescription:
         "MyMemory transcribes your speech on-device so you can save and recall memories by voice.",
+      // Phone → Mac LAN API over http:// (dev). Required once ATS is on.
+      NSAppTransportSecurity: {
+        NSAllowsLocalNetworking: true,
+      },
     },
   },
   android: {

@@ -1,40 +1,49 @@
 # MyMemory Web
 
-Next.js (App Router) web frontend for MyMemory. Two things in one app:
+Next.js (App Router) frontend, built as a **static export** for S3 + CloudFront
+(`output: "export"` in `next.config.mjs`). No Node server in production.
 
-1. **Marketing landing page** (`/`) — advertises the product. Static, no auth.
-2. **Functional web client** — a browser version of the iOS app:
-   - `/login` — dev sign-in (lists accounts from `/api/dev/accounts`)
-   - `/chat` — talk to the memory engine (store + recall)
-   - `/memories` — browse and delete saved memories
+1. **Marketing landing page** (`/`) — static, no auth.
+2. **App** — browser client for the same FastAPI backend as iOS:
+   - `/login/` — dev sign-in
+   - `/chat/` — store + recall
+   - `/memories/` — browse / edit entities
+   - `/admin/…` — prompts, users, metrics
 
-It talks to the same FastAPI backend as `apps/mobile`, using the dev
-`x-user-email` header for auth. Auth is persisted in `localStorage`.
+Auth uses `localStorage` + `x-user-email` (dev) or Google Bearer (prod).
 
-## Run
-
-```bash
-# From repo root (after `npm install`):
-npm run web:dev            # http://localhost:3000
-
-# Or from apps/web:
-npm run dev
-```
-
-The backend must be running and reachable from the browser. Point the web app
-at it via `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8080`):
+## Local
 
 ```bash
-cp .env.example .env.local   # then edit NEXT_PUBLIC_API_URL if needed
+cd apps/web
+cp .env.example .env.local   # NEXT_PUBLIC_API_URL=http://localhost:8080
+npm install
+npm run dev                  # http://localhost:3000
 ```
 
-Start the API with `ALLOW_DEV_AUTH_HEADERS=true` so the dev sign-in accounts
-appear on the login screen. The backend already allows all CORS origins.
+Or from repo root: `npm run web:dev`.
+
+Static preview:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8080 npm run build
+npm start                    # serves ./out on :3000
+```
+
+## Deploy to S3 + CloudFront
+
+```bash
+cd infra && terraform apply   # once: bucket + distribution
+
+NEXT_PUBLIC_API_URL=https://YOUR-API.awsapprunner.com \
+  ./deploy-web-static.sh
+```
+
+Custom domain (`memory.informedbydata.com`): see `infra/DOMAINS.md`.
 
 ## Notes
 
-- `src/theme.ts`, `src/types.ts`, and `src/api.ts` mirror their `apps/mobile`
-  counterparts so web and iOS stay in sync. The web `api.ts` swaps
-  expo-secure-store for `localStorage`.
-- Production Google OAuth is wired on the backend (`POST /api/auth/google`) but
-  not yet surfaced in the web UI — only dev sign-in is implemented here.
+- `apps/web` is **not** an npm workspace package (avoids React 19 from Expo
+  breaking the Next 14 static export). Install deps inside `apps/web/`.
+- Prompt editor is `/admin/prompts/edit/?key=…` (no dynamic `[key]` routes —
+  required for static export).

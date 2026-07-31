@@ -178,6 +178,11 @@ def _ollama_converse(
         body["format"] = json_schema
     response = httpx.post(
         f"{config.OLLAMA_BASE_URL}/api/chat",
+        headers=(
+            {"Authorization": f"Bearer {config.OPENAI_API_KEY}"}
+            if config.OPENAI_API_KEY and config.OPENAI_API_KEY != "not-needed"
+            else {}
+        ),
         json=body,
         timeout=120,
     )

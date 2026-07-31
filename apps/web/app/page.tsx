@@ -28,7 +28,7 @@ export default function Landing() {
           <div>
             <span className="pill">
               <span className="dot" />
-              Private memory · powered by vector RAG
+              Your second brain · always ready
             </span>
             <h1>
               Tell it once.
@@ -36,9 +36,9 @@ export default function Landing() {
               <span className="amber">Ask it anytime.</span>
             </h1>
             <p className="lead">
-              MyMemory is a personal memory store. Say or type anything you want
-              to remember — a license plate, a friend&apos;s address, a Wi-Fi
-              password — then just ask for it later, in plain language.
+              Save the random stuff you&apos;d forget — plates, passwords,
+              birthdays, Wi‑Fi — then just ask for it later like texting a
+              friend who never blanks.
             </p>
             <div className="hero-cta">
               <Link href="/login" className="btn btn-primary">
@@ -56,9 +56,9 @@ export default function Landing() {
           {/* Faux chat demo */}
           <div className="demo">
             <div className="demo-head">
-              <span className="lamp" style={{ background: "#d4694f" }} />
-              <span className="lamp" style={{ background: "#e8a13c" }} />
-              <span className="lamp" style={{ background: "#2f4a3a" }} />
+              <span className="lamp" style={{ background: "#ff6b8a" }} />
+              <span className="lamp" style={{ background: "#9aff6b" }} />
+              <span className="lamp" style={{ background: "#5ce1ff" }} />
               <span className="title">MYMEMORY</span>
             </div>
             <div className="bubbles">

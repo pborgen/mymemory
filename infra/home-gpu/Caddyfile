@@ -1,0 +1,21 @@
+# Caddy on the GPU box — bearer gate in front of vLLM + Ollama.
+# Replace REPLACE_WITH_HOME_GPU_API_KEY with:
+#   terraform output -raw home_gpu_api_key
+#
+# Listen on localhost only; Cloudflare Tunnel is the public edge.
+
+:8787 {
+	@authed header Authorization "Bearer REPLACE_WITH_HOME_GPU_API_KEY"
+	handle @authed {
+		reverse_proxy 127.0.0.1:8001
+	}
+	respond "unauthorized" 401
+}
+
+:8788 {
+	@authed header Authorization "Bearer REPLACE_WITH_HOME_GPU_API_KEY"
+	handle @authed {
+		reverse_proxy 127.0.0.1:11434
+	}
+	respond "unauthorized" 401
+}

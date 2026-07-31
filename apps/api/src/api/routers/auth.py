@@ -35,17 +35,25 @@ async def auth_google(body: dict = Body(default={})):
         from google.auth.transport import requests as google_requests
         from google.oauth2 import id_token as google_id_token
 
-        payload = await asyncio.to_thread(
-            google_id_token.verify_oauth2_token,
-            credential,
-            google_requests.Request(),
-            config.GOOGLE_CLIENT_ID,
+        payload = await asyncio.wait_for(
+            asyncio.to_thread(
+                google_id_token.verify_oauth2_token,
+                credential,
+                google_requests.Request(),
+                config.GOOGLE_CLIENT_ID,
+            ),
+            timeout=12,
         )
         email = payload.get("email")
         if not email:
             return JSONResponse({"error": "No email in token"}, status_code=401)
         await db.ensure_google_user(email, payload.get("name"))
         return {"ok": True, "email": email}
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            {"error": "Google token verify timed out (API needs HTTPS egress/NAT)"},
+            status_code=503,
+        )
     except Exception:
         return JSONResponse({"error": "Invalid Google token"}, status_code=401)
 

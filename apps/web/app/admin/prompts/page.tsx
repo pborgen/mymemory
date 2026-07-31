@@ -61,7 +61,11 @@ export default function PromptsAdmin() {
 
 function PromptRow({ prompt }: { prompt: Prompt }) {
   return (
-    <Link href={`/admin/prompts/${prompt.key}`} className="mem-row" style={{ textDecoration: "none" }}>
+    <Link
+      href={`/admin/prompts/edit/?key=${encodeURIComponent(prompt.key)}`}
+      className="mem-row"
+      style={{ textDecoration: "none" }}
+    >
       <div className="body">
         <div className="content">{prompt.name}</div>
         <div className="meta">

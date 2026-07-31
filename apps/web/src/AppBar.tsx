@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { useAuth } from "./auth";
 import { Logo } from "./Logo";
+import { ThemePicker } from "./theme";
 
 // Shared top bar for the signed-in app screens (chat + memories + admin).
 export function AppBar({
@@ -29,6 +30,7 @@ export function AppBar({
         {isAdmin && active !== "metrics" && (
           <Link href="/admin/metrics">Metrics</Link>
         )}
+        <ThemePicker />
         <button onClick={signOut}>Sign out</button>
       </div>
     </div>

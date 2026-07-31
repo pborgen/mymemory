@@ -1,9 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Emit a self-contained server bundle (.next/standalone) for a small Docker
-  // runtime image — used by the App Runner deploy.
-  output: "standalone",
+  // Static HTML/CSS/JS for S3 + CloudFront (no Node server).
+  output: "export",
+  // /chat/ → out/chat/index.html so S3/CloudFront can serve directories.
+  trailingSlash: true,
+  images: { unoptimized: true },
 };
 
 export default nextConfig;

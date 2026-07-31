@@ -6,7 +6,9 @@ import { useEffect } from "react";
 
 import { fetchDevAccounts } from "@/api";
 import { useAuth } from "@/auth";
+import { GoogleSignInButton } from "@/GoogleSignIn";
 import { Logo } from "@/Logo";
+import { ThemePicker } from "@/theme";
 
 export default function Login() {
   const router = useRouter();
@@ -16,9 +18,8 @@ export default function Login() {
     queryFn: fetchDevAccounts,
   });
 
-  // Once auth resolves (or after a sign-in), bounce to the chat.
   useEffect(() => {
-    if (!isLoading && isAuthenticated) router.replace("/chat");
+    if (!isLoading && isAuthenticated) router.replace("/chat/");
   }, [isLoading, isAuthenticated, router]);
 
   if (isLoading || isAuthenticated) {
@@ -48,32 +49,65 @@ export default function Login() {
             friend&apos;s address, a Wi-Fi password — then just ask for it later.
           </p>
 
-          <div style={{ fontSize: 12, letterSpacing: 2, color: "var(--text-dim)", marginBottom: 12 }}>
-            DEV SIGN-IN
-          </div>
-          {devAccounts.length === 0 ? (
-            <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
-              No dev accounts found. Start the API with{" "}
-              <code>ALLOW_DEV_AUTH_HEADERS=true</code> and make sure{" "}
-              <code>NEXT_PUBLIC_API_URL</code> points to it.
-            </p>
-          ) : (
-            devAccounts.map((acct) => (
-              <button
-                key={acct.email}
-                className="acct"
-                onClick={() => void signInDev(acct.email)}
+          <GoogleSignInButton />
+
+          {devAccounts.length > 0 && (
+            <>
+              <div
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 2,
+                  color: "var(--text-dim)",
+                  margin: "22px 0 12px",
+                }}
               >
-                <div className="name">{acct.name}</div>
-                <div className="email">{acct.email}</div>
-              </button>
-            ))
+                DEV SIGN-IN
+              </div>
+              {devAccounts.map((acct) => (
+                <button
+                  key={acct.email}
+                  className="acct"
+                  onClick={() => void signInDev(acct.email)}
+                >
+                  <div className="name">{acct.name}</div>
+                  <div className="email">{acct.email}</div>
+                </button>
+              ))}
+            </>
           )}
 
-          <p style={{ color: "var(--text-dim)", fontSize: 12, marginTop: 24, lineHeight: 1.5 }}>
-            Google sign-in is wired on the backend (POST /api/auth/google). Add a
-            Google OAuth flow here to enable production login.
-          </p>
+          {devAccounts.length === 0 && (
+            <p
+              style={{
+                color: "var(--text-dim)",
+                fontSize: 13,
+                marginTop: 16,
+                lineHeight: 1.5,
+              }}
+            >
+              Sign in with Google to open your private memory store.
+            </p>
+          )}
+
+          <div
+            style={{
+              marginTop: 18,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12,
+                letterSpacing: 2,
+                color: "var(--text-dim)",
+              }}
+            >
+              THEME
+            </span>
+            <ThemePicker />
+          </div>
         </div>
       </div>
     </div>

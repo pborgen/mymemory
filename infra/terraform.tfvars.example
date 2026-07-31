@@ -3,12 +3,6 @@
 aws_region = "us-east-1"
 app_name   = "mymemory"
 
-# Generation (Claude) + embeddings (Titan) both run on AWS Bedrock via the App
-# Runner instance role — no API keys needed. Make sure Bedrock model access is
-# enabled in this region (Bedrock console → Model access) for BOTH:
-#   - the Anthropic Claude model in rag_model_id
-#   - Amazon Titan Text Embeddings v2 (amazon.titan-embed-text-v2:0)
-
 # GitHub repo allowed to assume the keyless deploy role (owner/name).
 github_repo = "pborgen/mymemory"
 
@@ -16,8 +10,58 @@ github_repo = "pborgen/mymemory"
 # set this to false to look it up instead of creating a duplicate.
 # create_github_oidc_provider = true
 
-# Optional: set to enable Google OAuth login
+# ── LLM backend ───────────────────────────────────────────
+# "bedrock"  = Claude/Nova + Titan on AWS (PrivateLink for Bedrock)
+# "home_gpu" = vLLM + Ollama via Cloudflare Tunnel
+#
+# NAT (~$32/mo) is enabled when llm_backend=home_gpu OR google_client_id is set.
+# Google ID-token verify fetches certs from googleapis.com; VPC-only App Runner
+# egress cannot reach the public internet without NAT.
+llm_backend = "bedrock"
+
+# --- home_gpu (fill after cloudflared DNS routes exist; see infra/home-gpu/) ---
+# home_gpu_openai_base_url = "https://mymemory-llm.YOURDOMAIN.com/v1"
+# home_gpu_embed_base_url  = "https://mymemory-embed.YOURDOMAIN.com"
+# home_gpu_chat_model      = "Qwen/Qwen2.5-0.5B-Instruct"
+# home_gpu_embed_model     = "mxbai-embed-large"
+# home_gpu_embed_dim       = 1024
+# home_gpu_api_key       = ""  # blank → terraform generates; paste into Caddyfile
+
+# --- bedrock (only when llm_backend = "bedrock") ---
+# Enable Bedrock model access in this region for BOTH generation + Titan embed.
+# rag_model_id   = "us.amazon.nova-2-lite-v1:0"
+# embed_model_id = "amazon.titan-embed-text-v2:0"
+
+# Required for a public API: Google OAuth client ID (API refuses to boot in
+# production without it). Create an OAuth Web client in Google Cloud Console.
+# Setting this also enables NAT for token verification egress.
 google_client_id = ""
+
+# Your Google email — seeded as profiles.role=admin on API startup.
+super_admin_email = ""
+
+# Comma-separated browser origins allowed to call the API (CloudFront / custom).
+# Required in production — empty/* refuses boot.
+# Example:
+#   cors_origins = "https://d1x2llv8fpgnu8.cloudfront.net"
+cors_origins = ""
+
+# Keep false on the public App Runner URL (x-user-email spoof bypass).
+allow_dev_auth_headers = "false"
+
+# API ENVIRONMENT. Use "production" only with Google OAuth + locked CORS.
+app_environment = "production"
+
+# Custom API hostname (GoDaddy CNAME → App Runner). See infra/DOMAINS.md.
+# api_custom_domain = "api.memory.informedbydata.com"
+
+# Web UI on S3 + CloudFront (static Next export). Leave App Runner web off.
+deploy_web_on_apprunner = false
+# web_custom_domain       = "memory.informedbydata.com"
+# web_acm_certificate_arn = "arn:aws:acm:us-east-1:…:certificate/…"
+
+# rate_limit_chat_per_min  = 30
+# rate_limit_store_per_min = 20
 
 # Leave blank to auto-generate a strong DB password (recommended)
 db_password = ""

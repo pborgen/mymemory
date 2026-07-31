@@ -28,12 +28,28 @@ data "aws_subnets" "apprunner" {
     name   = "availability-zone-id"
     values = var.apprunner_az_ids
   }
+  # Exclude our NAT private subnets (map_public_ip_on_launch=false).
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
+  }
+}
+
+locals {
+  # Hash changes when connector subnets change → forces a new SG + connector
+  # (App Runner forbids two connectors sharing the same security-group set).
+  connector_hash = substr(sha1(join(",", local.apprunner_subnet_ids)), 0, 8)
+  # CIDR allow-lists so RDS/VPCE stay reachable while SG+connector rotate.
+  apprunner_subnet_cidrs = local.need_nat ? aws_subnet.private[*].cidr_block : [
+    for id in data.aws_subnets.apprunner.ids : data.aws_subnet.apprunner_public[id].cidr_block
+  ]
 }
 
 # Security group for the App Runner VPC connector (egress side).
 resource "aws_security_group" "apprunner" {
-  name_prefix = "${var.app_name}-apprunner-"
-  description = "App Runner VPC connector egress"
+  # Include subnet hash so a parallel connector can use a different SG.
+  name_prefix = "${var.app_name}-apr-${local.connector_hash}-"
+  description = "App Runner VPC connector egress (${local.connector_hash})"
   vpc_id      = data.aws_vpc.default.id
 
   egress {
@@ -49,18 +65,18 @@ resource "aws_security_group" "apprunner" {
   }
 }
 
-# Security group for RDS: only the App Runner connector may reach Postgres.
+# Security group for RDS: App Runner connector subnet CIDRs only.
 resource "aws_security_group" "rds" {
   name_prefix = "${var.app_name}-rds-"
-  description = "Postgres access from App Runner only"
+  description = "Postgres access from App Runner connector subnets"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description     = "Postgres from App Runner connector"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.apprunner.id]
+    description = "Postgres from App Runner connector subnets"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = local.apprunner_subnet_cidrs
   }
 
   lifecycle {
@@ -69,7 +85,14 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_apprunner_vpc_connector" "main" {
-  vpc_connector_name = "${var.app_name}-connector"
-  subnets            = data.aws_subnets.apprunner.ids
+  # Name must change when subnets change so create_before_destroy can mint a
+  # new connector while App Runner still references the old one. SG must also
+  # change (see apprunner SG name_prefix) — AWS rejects duplicate SG combos.
+  vpc_connector_name = "${var.app_name}-conn-${local.connector_hash}"
+  subnets            = local.apprunner_subnet_ids
   security_groups    = [aws_security_group.apprunner.id]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }

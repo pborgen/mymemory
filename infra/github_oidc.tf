@@ -72,7 +72,10 @@ data "aws_iam_policy_document" "github_deploy" {
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
     ]
-    resources = [aws_ecr_repository.api.arn, aws_ecr_repository.web.arn]
+    resources = compact(concat(
+      [aws_ecr_repository.api.arn],
+      var.deploy_web_on_apprunner ? [aws_ecr_repository.web[0].arn] : [],
+    ))
   }
   statement {
     sid = "AppRunnerReadAndDeploy"
