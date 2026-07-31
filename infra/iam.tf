@@ -41,6 +41,10 @@ data "aws_iam_policy_document" "apprunner_secrets" {
     resources = compact(concat(
       [aws_secretsmanager_secret.postgres_url.arn],
       local.use_home_gpu ? [aws_secretsmanager_secret.home_gpu_api_key[0].arn] : [],
+      local.langfuse_enabled ? [
+        aws_secretsmanager_secret.langfuse_public_key[0].arn,
+        aws_secretsmanager_secret.langfuse_secret_key[0].arn,
+      ] : [],
     ))
   }
 }

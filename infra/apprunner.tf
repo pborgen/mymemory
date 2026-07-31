@@ -32,6 +32,11 @@ resource "aws_apprunner_service" "main" {
             SUPER_ADMIN_EMAIL = var.super_admin_email
           } : {},
           local.llm_env,
+          local.langfuse_enabled ? {
+            LANGFUSE_ENABLED             = "true"
+            LANGFUSE_BASE_URL            = var.langfuse_base_url
+            LANGFUSE_TRACING_ENVIRONMENT = var.langfuse_tracing_environment
+          } : {},
         )
 
         runtime_environment_secrets = merge(
@@ -41,6 +46,10 @@ resource "aws_apprunner_service" "main" {
           local.use_home_gpu ? {
             OPENAI_API_KEY = aws_secretsmanager_secret.home_gpu_api_key[0].arn
             EMBED_API_KEY  = aws_secretsmanager_secret.home_gpu_api_key[0].arn
+          } : {},
+          local.langfuse_enabled ? {
+            LANGFUSE_PUBLIC_KEY = aws_secretsmanager_secret.langfuse_public_key[0].arn
+            LANGFUSE_SECRET_KEY = aws_secretsmanager_secret.langfuse_secret_key[0].arn
           } : {},
         )
       }

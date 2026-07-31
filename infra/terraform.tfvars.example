@@ -49,6 +49,12 @@ cors_origins = ""
 # Keep false on the public App Runner URL (x-user-email spoof bypass).
 allow_dev_auth_headers = "false"
 
+# Optional Langfuse cloud tracing (keys live in Secrets Manager when set).
+# langfuse_public_key = "pk-lf-..."
+# langfuse_secret_key = "sk-lf-..."
+# langfuse_base_url = "https://cloud.langfuse.com"
+# langfuse_tracing_environment = "production"
+
 # API ENVIRONMENT. Use "production" only with Google OAuth + locked CORS.
 app_environment = "production"
 

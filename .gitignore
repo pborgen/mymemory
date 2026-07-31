@@ -6,3 +6,8 @@ __pycache__/
 .expo/
 dist/
 .DS_Store
+
+# Accidental Expo prebuild at monorepo root (real app lives in apps/mobile/)
+/app.json
+/ios/
+.cursor-artifacts/

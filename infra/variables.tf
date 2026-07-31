@@ -116,6 +116,33 @@ variable "rate_limit_store_per_min" {
   default     = 20
 }
 
+# ── Langfuse (optional observability) ─────────────────────
+variable "langfuse_public_key" {
+  description = "Langfuse public key (pk-lf-…). Blank skips wiring into App Runner."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "langfuse_secret_key" {
+  description = "Langfuse secret key (sk-lf-…). Blank skips wiring into App Runner."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "langfuse_base_url" {
+  description = "Langfuse API base URL"
+  type        = string
+  default     = "https://cloud.langfuse.com"
+}
+
+variable "langfuse_tracing_environment" {
+  description = "Langfuse tracing environment label (e.g. production)"
+  type        = string
+  default     = "production"
+}
+
 # ── Database ──────────────────────────────────────────────
 variable "db_name" {
   description = "Initial database name"
