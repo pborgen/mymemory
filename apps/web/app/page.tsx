@@ -22,14 +22,10 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* Hero */}
       <header className="hero">
         <div className="container hero-grid">
           <div>
-            <span className="pill">
-              <span className="dot" />
-              Your second brain · always ready
-            </span>
+            <Logo hero iconSize={36} />
             <h1>
               Tell it once.
               <br />
@@ -53,23 +49,19 @@ export default function Landing() {
             </p>
           </div>
 
-          {/* Faux chat demo */}
           <div className="demo">
             <div className="demo-head">
-              <span className="lamp" style={{ background: "#ff6b8a" }} />
-              <span className="lamp" style={{ background: "#9aff6b" }} />
-              <span className="lamp" style={{ background: "#5ce1ff" }} />
-              <span className="title">MYMEMORY</span>
+              <span className="title">CONVERSATION</span>
             </div>
             <div className="bubbles">
               <div className="bubble user">My car license plate is 8XYZ123</div>
               <div className="bubble bot">
-                <span className="tag">✓ Stored</span>
+                <span className="tag">Stored</span>
                 Got it — I&apos;ll remember your license plate is 8XYZ123.
               </div>
               <div className="bubble user">What&apos;s my license plate?</div>
               <div className="bubble bot">
-                <span className="tag">↩ Recalled</span>
+                <span className="tag">Recalled</span>
                 Your car license plate is <b>8XYZ123</b>.
               </div>
             </div>
@@ -77,7 +69,6 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Features */}
       <section className="block" id="features">
         <div className="container">
           <span className="section-kicker">Why MyMemory</span>
@@ -90,23 +81,23 @@ export default function Landing() {
           </p>
           <div className="features">
             <div className="card">
-              <div className="ico">🗣️</div>
-              <h3>Just say it</h3>
+              <div className="ico">Say it</div>
+              <h3>Just talk</h3>
               <p>
                 Type or speak naturally. MyMemory figures out whether you&apos;re
                 telling it something new or asking for it back.
               </p>
             </div>
             <div className="card">
-              <div className="ico">🔎</div>
-              <h3>Semantic recall</h3>
+              <div className="ico">Recall</div>
+              <h3>Semantic search</h3>
               <p>
                 Ask in your own words. Vector search finds the right memory even
                 when you don&apos;t use the exact phrasing you saved.
               </p>
             </div>
             <div className="card">
-              <div className="ico">🔒</div>
+              <div className="ico">Private</div>
               <h3>Yours alone</h3>
               <p>
                 Every memory is scoped to your account. Answers are grounded only
@@ -114,34 +105,33 @@ export default function Landing() {
               </p>
             </div>
             <div className="card">
-              <div className="ico">🎙️</div>
-              <h3>Voice-first</h3>
+              <div className="ico">Voice</div>
+              <h3>Hands-free</h3>
               <p>
-                On the iOS app, speak hands-free with on-device transcription.
-                The web app keeps the same fast chat experience.
+                On the iOS app, speak with on-device transcription. The web app
+                keeps the same fast chat experience.
               </p>
             </div>
             <div className="card">
-              <div className="ico">📋</div>
-              <h3>Browse anytime</h3>
+              <div className="ico">Browse</div>
+              <h3>See everything</h3>
               <p>
                 Every fact you save shows up in a clean list. Review what
                 MyMemory knows and delete anything with one tap.
               </p>
             </div>
             <div className="card">
-              <div className="ico">⚡</div>
-              <h3>Grounded answers</h3>
+              <div className="ico">Grounded</div>
+              <h3>Cited answers</h3>
               <p>
-                Built on Claude with retrieval-augmented generation — replies are
-                drawn from your memories, not made up.
+                Replies are drawn from your memories via retrieval-augmented
+                generation — not invented.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* How it works */}
       <section className="block" id="how">
         <div className="container">
           <span className="section-kicker">How it works</span>
@@ -175,7 +165,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA */}
       <div className="container">
         <div className="cta">
           <h2>Start remembering everything.</h2>
@@ -189,7 +178,6 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer>
         <div className="container footer">
           <span>© {2026} MyMemory — your private memory store.</span>

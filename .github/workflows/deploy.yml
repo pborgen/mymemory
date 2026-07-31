@@ -1,11 +1,13 @@
 name: Deploy
 
-# Build the API image and push it to ECR. App Runner has
-# auto_deployments_enabled, so a new :latest image triggers a redeploy; we also
-# issue an explicit StartDeployment as a belt-and-suspenders nudge.
+# Pushes to main update AWS:
+#   - apps/api/**  → build/push ECR image → App Runner redeploy
+#   - apps/web/**  → static export → S3 sync → CloudFront invalidate
 #
-# Requires (created by `infra/` terraform, then set in repo settings):
-#   Variables: AWS_DEPLOY_ROLE_ARN, AWS_REGION, ECR_REPOSITORY
+# Requires repo Variables (Settings → Secrets and variables → Actions):
+#   AWS_DEPLOY_ROLE_ARN, AWS_REGION, ECR_REPOSITORY,
+#   WEB_BUCKET, WEB_CLOUDFRONT_DISTRIBUTION_ID,
+#   NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SITE_URL
 # Auth is keyless via GitHub OIDC — no stored AWS keys.
 
 on:
@@ -13,8 +15,18 @@ on:
     branches: [main]
     paths:
       - "apps/api/**"
+      - "apps/web/**"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
+    inputs:
+      deploy_api:
+        description: "Deploy API (App Runner)"
+        type: boolean
+        default: true
+      deploy_web:
+        description: "Deploy web (S3 + CloudFront)"
+        type: boolean
+        default: true
 
 concurrency:
   group: deploy-production
@@ -25,8 +37,31 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: build + push to ECR
+  changes:
+    name: detect paths
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - '.github/workflows/deploy.yml'
+            web:
+              - 'apps/web/**'
+              - '.github/workflows/deploy.yml'
+
+  api:
+    name: API → ECR + App Runner
+    needs: changes
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_api == true) ||
+      (github.event_name == 'push' && needs.changes.outputs.api == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,3 +107,62 @@ jobs:
           fi
           echo "Starting deployment for $ARN"
           aws apprunner start-deployment --region "$AWS_REGION" --service-arn "$ARN"
+
+  web:
+    name: Web → S3 + CloudFront
+    needs: changes
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_web == true) ||
+      (github.event_name == 'push' && needs.changes.outputs.web == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Build static export
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          if [ ! -d out ]; then
+            echo "Missing apps/web/out — next build did not produce a static export." >&2
+            exit 1
+          fi
+          if [ ! -f out/404.html ] && [ -f out/404/index.html ]; then
+            cp out/404/index.html out/404.html
+          elif [ ! -f out/404.html ]; then
+            cp out/index.html out/404.html
+          fi
+
+      - name: Sync to S3 and invalidate CloudFront
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          BUCKET: ${{ vars.WEB_BUCKET }}
+          DIST_ID: ${{ vars.WEB_CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+          aws s3 sync apps/web/out/ "s3://$BUCKET/" --delete --region "$AWS_REGION" \
+            --cache-control "public,max-age=300" \
+            --exclude "*.html"
+          aws s3 sync apps/web/out/ "s3://$BUCKET/" --region "$AWS_REGION" \
+            --exclude "*" --include "*.html" \
+            --cache-control "public,max-age=60" \
+            --content-type "text/html; charset=utf-8"
+          aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" \
+            --query 'Invalidation.Id' --output text
+          echo "Web: ${{ vars.NEXT_PUBLIC_SITE_URL }}"

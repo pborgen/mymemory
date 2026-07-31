@@ -36,8 +36,8 @@ export default function Login() {
     <div className="app-shell">
       <div className="center-card">
         <div className="auth-card">
-          <div style={{ marginBottom: 18 }}>
-            <Logo iconSize={30} />
+          <div style={{ marginBottom: 22 }}>
+            <Logo hero iconSize={34} />
           </div>
           <h1>
             Tell it once.

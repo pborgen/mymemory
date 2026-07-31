@@ -62,20 +62,36 @@ terraform output -raw home_gpu_api_key   # → Caddyfile bearer
 
 ## Deploy (from GitHub Actions)
 
-After the first `./deploy.sh` (which creates the ECR repo + OIDC deploy role):
+Pushes to `main` that touch `apps/api/**` or `apps/web/**` run
+`.github/workflows/deploy.yml` (OIDC → IAM role, no long-lived AWS keys):
+
+- **API** — build/push ECR → App Runner (`auto_deployments_enabled` + explicit
+  `StartDeployment`)
+- **Web** — Next.js static export → S3 sync → CloudFront invalidation
+
+After the first `./deploy.sh` (ECR + OIDC deploy role + static web stack):
 
 ```bash
-terraform output github_actions_role_arn   # -> set as repo variable AWS_DEPLOY_ROLE_ARN
+terraform output github_actions_role_arn   # AWS_DEPLOY_ROLE_ARN
+terraform output -raw web_bucket           # WEB_BUCKET
+terraform output -raw web_cloudfront_distribution_id  # WEB_CLOUDFRONT_DISTRIBUTION_ID
+terraform output -raw app_url              # NEXT_PUBLIC_API_URL
+terraform output -raw web_url              # NEXT_PUBLIC_SITE_URL
 ```
 
-In the GitHub repo, add **Settings → Secrets and variables → Actions → Variables**:
+Repo **Variables** (Settings → Secrets and variables → Actions):
 
-- `AWS_DEPLOY_ROLE_ARN` — the role ARN above
-- `AWS_REGION` — e.g. `us-east-1`
-- `ECR_REPOSITORY` — `mymemory` (the `app_name`)
+| Variable | Example |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::…:role/mymemory-github-deploy` |
+| `AWS_REGION` | `us-east-1` |
+| `ECR_REPOSITORY` | `mymemory` |
+| `WEB_BUCKET` | from `web_bucket` output |
+| `WEB_CLOUDFRONT_DISTRIBUTION_ID` | from `web_cloudfront_distribution_id` |
+| `NEXT_PUBLIC_API_URL` | App Runner API URL (no trailing slash) |
+| `NEXT_PUBLIC_SITE_URL` | CloudFront (or custom) web origin |
 
-Then pushes to `main` trigger `.github/workflows/deploy.yml`, which builds and
-pushes a new image; App Runner auto-redeploys (`auto_deployments_enabled`).
+Manual runs: Actions → Deploy → Run workflow (toggle API / web).
 
 ## Config (`terraform.tfvars`)
 
