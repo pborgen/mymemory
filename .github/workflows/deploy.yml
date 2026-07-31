@@ -105,8 +105,18 @@ jobs:
             echo "(auto_deployments_enabled will redeploy from the new :latest image.)"
             exit 0
           fi
+          STATUS=$(aws apprunner describe-service --region "$AWS_REGION" --service-arn "$ARN" \
+            --query 'Service.Status' --output text)
+          echo "Service status: $STATUS"
+          if [ "$STATUS" != "RUNNING" ]; then
+            echo "Service already deploying/updating ($STATUS); auto_deployments_enabled will finish."
+            exit 0
+          fi
           echo "Starting deployment for $ARN"
-          aws apprunner start-deployment --region "$AWS_REGION" --service-arn "$ARN"
+          if ! aws apprunner start-deployment --region "$AWS_REGION" --service-arn "$ARN"; then
+            echo "StartDeployment failed (often a race with auto_deployments); image already pushed."
+            exit 0
+          fi
 
   web:
     name: Web → S3 + CloudFront
