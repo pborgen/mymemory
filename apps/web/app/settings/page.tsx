@@ -18,6 +18,13 @@ import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import type { FeatureFlag, UserSettings } from "@/types";
 
+const GROUP_BLURBS: Record<string, string> = {
+  Chat: "How conversation behaves when you talk to MyMemory.",
+  Memories: "How your saved facts are shown and protected.",
+  Capture: "Ways to bring facts in — and take them out.",
+  Advanced: "Experimental extras. Keep off unless you need them.",
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
@@ -25,6 +32,7 @@ export default function SettingsPage() {
   const [pasteText, setPasteText] = useState("");
   const [importText, setImportText] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  const [activeGroup, setActiveGroup] = useState<string>("Chat");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/login");
@@ -49,11 +57,17 @@ export default function SettingsPage() {
     return [...map.entries()];
   }, [catalog]);
 
+  const enabledCount = useMemo(() => {
+    if (!settings) return 0;
+    return Object.values(settings).filter(Boolean).length;
+  }, [settings]);
+
   const save = useMutation({
     mutationFn: (patch: Partial<UserSettings>) => updateSettings(patch),
     onSuccess: (res) => {
       queryClient.setQueryData(["settings"], res);
-      setStatus("Saved");
+      setStatus("Synced");
+      window.setTimeout(() => setStatus(null), 1600);
     },
     onError: (e: Error) => setStatus(e.message),
   });
@@ -63,6 +77,12 @@ export default function SettingsPage() {
     queryFn: fetchReminders,
     enabled: !!settings?.reminders && isAuthenticated,
   });
+
+  useEffect(() => {
+    if (groups.length && !groups.some(([g]) => g === activeGroup)) {
+      setActiveGroup(groups[0][0]);
+    }
+  }, [groups, activeGroup]);
 
   if (isLoading || !isAuthenticated || settingsLoading || !settings) {
     return (
@@ -78,183 +98,242 @@ export default function SettingsPage() {
     save.mutate({ [key]: !settings[key] });
   };
 
+  const activeItems = groups.find(([g]) => g === activeGroup)?.[1] ?? [];
+
   return (
     <div className="app-shell">
       <AppBar active="settings" />
-      <div className="container settings-wrap">
-        <h1 className="settings-title">Settings</h1>
-        <p className="settings-lead">
-          Turn features on only when you want them — chat stays quiet by default.
-        </p>
-        {status ? <p className="settings-status">{status}</p> : null}
+      <div className="settings-stage">
+        <div className="settings-aurora" aria-hidden="true" />
+        <div className="container settings-hero">
+          <p className="settings-brand">MyMemory</p>
+          <h1 className="settings-title">
+            Dial in
+            <span className="settings-title-accent"> what stays quiet.</span>
+          </h1>
+          <p className="settings-lead">
+            Features stay off until you want them — chat stays clean by default.
+          </p>
+          <div className="settings-meter" aria-live="polite">
+            <span className="settings-meter-track">
+              <span
+                className="settings-meter-fill"
+                style={{
+                  width: `${Math.min(100, (enabledCount / Math.max(1, Object.keys(settings).length)) * 100)}%`,
+                }}
+              />
+            </span>
+            <span className="settings-meter-label">
+              {enabledCount} live
+              {status ? <em className="settings-status"> · {status}</em> : null}
+            </span>
+          </div>
+        </div>
+      </div>
 
-        {groups.map(([group, items]) => (
-          <section key={group} className="settings-group">
-            <h2>{group}</h2>
-            <ul className="settings-list">
-              {items.map((item) => (
-                <li key={item.key}>
-                  <div>
+      <div className="container settings-board">
+        <nav className="settings-rail" aria-label="Settings groups">
+          {groups.map(([group, items], index) => {
+            const onCount = items.filter((i) => settings[i.key]).length;
+            return (
+              <button
+                key={group}
+                type="button"
+                className={`settings-rail-item ${activeGroup === group ? "active" : ""}`}
+                onClick={() => setActiveGroup(group)}
+              >
+                <span className="settings-rail-index">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="settings-rail-copy">
+                  <span className="settings-rail-name">{group}</span>
+                  <span className="settings-rail-meta">
+                    {onCount}/{items.length} on
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="settings-panel" key={activeGroup}>
+          <header className="settings-panel-head">
+            <h2>{activeGroup}</h2>
+            <p>{GROUP_BLURBS[activeGroup] ?? "Optional capabilities for this area."}</p>
+          </header>
+
+          <ul className="settings-list">
+            {activeItems.map((item, i) => {
+              const on = settings[item.key];
+              return (
+                <li
+                  key={item.key}
+                  className={`settings-row ${on ? "is-on" : ""}`}
+                  style={{ animationDelay: `${i * 45}ms` }}
+                >
+                  <div className="settings-row-text">
                     <div className="settings-name">{item.name}</div>
                     <div className="settings-desc">{item.description}</div>
                   </div>
                   <button
                     type="button"
-                    className={`settings-toggle ${settings[item.key] ? "on" : ""}`}
-                    aria-pressed={settings[item.key]}
+                    className={`settings-switch ${on ? "on" : ""}`}
+                    aria-pressed={on}
+                    aria-label={`${item.name}: ${on ? "on" : "off"}`}
                     onClick={() => toggle(item.key)}
                   >
-                    {settings[item.key] ? "On" : "Off"}
+                    <span className="settings-switch-knob" />
+                    <span className="settings-switch-label">{on ? "On" : "Off"}</span>
                   </button>
                 </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+              );
+            })}
+          </ul>
 
-        {settings.pasteInbox ? (
-          <section className="settings-group">
-            <h2>Paste inbox</h2>
-            <textarea
-              className="settings-textarea"
-              rows={5}
-              value={pasteText}
-              onChange={(e) => setPasteText(e.target.value)}
-              placeholder="One fact per line…"
-            />
-            <button
-              type="button"
-              className="settings-action"
-              onClick={async () => {
-                try {
-                  const res = await pasteInbox(pasteText);
-                  setPasteText("");
-                  setStatus(`Saved ${res.count} memories`);
-                  queryClient.invalidateQueries({ queryKey: ["memories"] });
-                } catch (e) {
-                  setStatus(e instanceof Error ? e.message : "Paste failed");
-                }
-              }}
-            >
-              Save lines
-            </button>
-          </section>
-        ) : null}
-
-        {settings.importExport ? (
-          <section className="settings-group">
-            <h2>Import / export</h2>
-            <div className="settings-actions">
+          {activeGroup === "Capture" && settings.pasteInbox ? (
+            <div className="settings-tool">
+              <h3>Paste inbox</h3>
+              <textarea
+                className="settings-textarea"
+                rows={5}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder="One fact per line…"
+              />
               <button
                 type="button"
                 className="settings-action"
                 onClick={async () => {
                   try {
-                    const data = await exportMemoriesJson();
-                    const blob = new Blob([JSON.stringify(data, null, 2)], {
-                      type: "application/json",
-                    });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = "mymemory-export.json";
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    setStatus(`Exported ${data.count} memories`);
-                  } catch (e) {
-                    setStatus(e instanceof Error ? e.message : "Export failed");
-                  }
-                }}
-              >
-                Download JSON
-              </button>
-              <button
-                type="button"
-                className="settings-action danger"
-                onClick={async () => {
-                  if (!window.confirm("Delete ALL memories? This cannot be undone easily.")) {
-                    return;
-                  }
-                  try {
-                    const res = await deleteAllMemories();
-                    setStatus(`Deleted ${res.deleted} memories`);
+                    const res = await pasteInbox(pasteText);
+                    setPasteText("");
+                    setStatus(`Saved ${res.count}`);
                     queryClient.invalidateQueries({ queryKey: ["memories"] });
                   } catch (e) {
-                    setStatus(e instanceof Error ? e.message : "Delete failed");
+                    setStatus(e instanceof Error ? e.message : "Paste failed");
                   }
                 }}
               >
-                Delete all memories
+                Save lines
               </button>
             </div>
-            <textarea
-              className="settings-textarea"
-              rows={4}
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder="Paste CSV or one fact per line to import…"
-            />
-            <button
-              type="button"
-              className="settings-action"
-              onClick={async () => {
-                try {
-                  const res = await importMemoriesText(importText);
-                  setImportText("");
-                  setStatus(`Imported ${res.count} memories`);
-                  queryClient.invalidateQueries({ queryKey: ["memories"] });
-                } catch (e) {
-                  setStatus(e instanceof Error ? e.message : "Import failed");
-                }
-              }}
-            >
-              Import
-            </button>
-          </section>
-        ) : null}
+          ) : null}
 
-        {settings.reminders ? (
-          <section className="settings-group">
-            <h2>Reminders</h2>
-            <p className="settings-desc">
-              In chat: “remind me to call the lender tomorrow”.
-            </p>
-            <ul className="settings-list">
-              {(remindersQuery.data ?? []).map((r) => (
-                <li key={r.id}>
-                  <div>
-                    <div className="settings-name">{r.content}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="settings-action"
-                    onClick={async () => {
-                      await markReminderDone(r.id);
-                      queryClient.invalidateQueries({ queryKey: ["reminders"] });
-                    }}
-                  >
-                    Done
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {(remindersQuery.data ?? []).length === 0 ? (
-              <p className="settings-desc">No open reminders.</p>
-            ) : null}
-          </section>
-        ) : null}
+          {activeGroup === "Capture" && settings.importExport ? (
+            <div className="settings-tool">
+              <h3>Import / export</h3>
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="settings-action"
+                  onClick={async () => {
+                    try {
+                      const data = await exportMemoriesJson();
+                      const blob = new Blob([JSON.stringify(data, null, 2)], {
+                        type: "application/json",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "mymemory-export.json";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      setStatus(`Exported ${data.count}`);
+                    } catch (e) {
+                      setStatus(e instanceof Error ? e.message : "Export failed");
+                    }
+                  }}
+                >
+                  Download JSON
+                </button>
+                <button
+                  type="button"
+                  className="settings-action danger"
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        "Delete ALL memories? This cannot be undone easily.",
+                      )
+                    ) {
+                      return;
+                    }
+                    try {
+                      const res = await deleteAllMemories();
+                      setStatus(`Deleted ${res.deleted}`);
+                      queryClient.invalidateQueries({ queryKey: ["memories"] });
+                    } catch (e) {
+                      setStatus(e instanceof Error ? e.message : "Delete failed");
+                    }
+                  }}
+                >
+                  Delete all
+                </button>
+              </div>
+              <textarea
+                className="settings-textarea"
+                rows={4}
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder="Paste CSV or one fact per line…"
+              />
+              <button
+                type="button"
+                className="settings-action"
+                onClick={async () => {
+                  try {
+                    const res = await importMemoriesText(importText);
+                    setImportText("");
+                    setStatus(`Imported ${res.count}`);
+                    queryClient.invalidateQueries({ queryKey: ["memories"] });
+                  } catch (e) {
+                    setStatus(e instanceof Error ? e.message : "Import failed");
+                  }
+                }}
+              >
+                Import
+              </button>
+            </div>
+          ) : null}
 
-        {settings.iosIntegrations ? (
-          <section className="settings-group">
-            <h2>iOS tips</h2>
-            <p className="settings-desc">
-              Shortcuts deep link: <code>mymemory://chat</code>. Add a Shortcut that
-              opens the app and dictates a fact, or pin a Reminders-style widget that
-              jumps into Chat. Siri: create a Shortcut phrase like “Remember this”
-              that opens MyMemory with the clipboard.
-            </p>
-          </section>
-        ) : null}
+          {activeGroup === "Capture" && settings.reminders ? (
+            <div className="settings-tool">
+              <h3>Reminders</h3>
+              <p className="settings-desc">
+                In chat: “remind me to call the lender tomorrow”.
+              </p>
+              <ul className="settings-reminders">
+                {(remindersQuery.data ?? []).map((r) => (
+                  <li key={r.id}>
+                    <span>{r.content}</span>
+                    <button
+                      type="button"
+                      className="settings-action"
+                      onClick={async () => {
+                        await markReminderDone(r.id);
+                        queryClient.invalidateQueries({ queryKey: ["reminders"] });
+                      }}
+                    >
+                      Done
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {(remindersQuery.data ?? []).length === 0 ? (
+                <p className="settings-desc">No open reminders.</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {activeGroup === "Advanced" && settings.iosIntegrations ? (
+            <div className="settings-tool">
+              <h3>iOS tips</h3>
+              <p className="settings-desc">
+                Deep link <code>mymemory://chat</code> — wire a Shortcut or Siri phrase
+                that opens Chat with a dictated fact.
+              </p>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

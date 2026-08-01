@@ -77,22 +77,19 @@ export default function Settings() {
   if (!isAuthenticated) return <Redirect href="/login" />;
   if (!settings) return null;
 
+  const enabledCount = Object.values(settings).filter(Boolean).length;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
       <View
         style={{
           flexDirection: "row",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
           paddingHorizontal: 18,
-          paddingBottom: 12,
-          borderBottomColor: theme.border,
-          borderBottomWidth: 1,
+          paddingBottom: 4,
         }}
       >
-        <Text style={{ color: theme.text, fontSize: 20, fontWeight: "700" }}>
-          Settings
-        </Text>
         <Link href="/chat" asChild>
           <Pressable hitSlop={8}>
             <Text style={{ color: theme.accent, fontSize: 15 }}>Chat ›</Text>
@@ -100,26 +97,74 @@ export default function Settings() {
         </Link>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 60, gap: 22 }}>
-        <Text style={{ color: theme.textDim, fontSize: 15, lineHeight: 22 }}>
-          Turn features on only when you want them — chat stays quiet by default.
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 60 }}>
+        <Text
+          style={{
+            color: theme.accent,
+            fontSize: 42,
+            fontWeight: "800",
+            letterSpacing: -1.5,
+            lineHeight: 44,
+            marginBottom: 10,
+          }}
+        >
+          MyMemory
         </Text>
-        {status ? (
-          <Text style={{ color: theme.accent, fontSize: 14 }}>{status}</Text>
-        ) : null}
+        <Text
+          style={{
+            color: theme.text,
+            fontSize: 26,
+            fontWeight: "700",
+            letterSpacing: -0.5,
+            lineHeight: 32,
+            marginBottom: 10,
+          }}
+        >
+          Dial in{"\n"}
+          <Text style={{ color: theme.accent }}>what stays quiet.</Text>
+        </Text>
+        <Text style={{ color: theme.textDim, fontSize: 15, lineHeight: 22, marginBottom: 10 }}>
+          Features stay off until you want them.
+        </Text>
+        <Text
+          style={{
+            color: theme.textDim,
+            fontSize: 12,
+            letterSpacing: 1.5,
+            fontWeight: "700",
+            marginBottom: 22,
+          }}
+        >
+          {enabledCount} LIVE{status ? `  ·  ${status.toUpperCase()}` : ""}
+        </Text>
 
-        {groups.map(([group, items]) => (
-          <View key={group} style={{ gap: 12 }}>
-            <Text
+        {groups.map(([group, items], groupIndex) => (
+          <View key={group} style={{ marginBottom: 28 }}>
+            <View
               style={{
-                color: theme.textDim,
-                fontSize: 12,
-                letterSpacing: 2,
-                fontWeight: "700",
+                flexDirection: "row",
+                alignItems: "baseline",
+                gap: 10,
+                marginBottom: 12,
+                paddingBottom: 10,
+                borderBottomColor: theme.border,
+                borderBottomWidth: 1,
               }}
             >
-              {group.toUpperCase()}
-            </Text>
+              <Text
+                style={{
+                  color: theme.accent,
+                  fontSize: 18,
+                  fontWeight: "700",
+                  letterSpacing: -0.5,
+                }}
+              >
+                {String(groupIndex + 1).padStart(2, "0")}
+              </Text>
+              <Text style={{ color: theme.text, fontSize: 20, fontWeight: "700" }}>
+                {group}
+              </Text>
+            </View>
             {items.map((item) => (
               <View
                 key={item.key}
@@ -127,13 +172,13 @@ export default function Settings() {
                   flexDirection: "row",
                   gap: 14,
                   alignItems: "center",
-                  paddingVertical: 8,
+                  paddingVertical: 14,
                   borderBottomColor: theme.border,
                   borderBottomWidth: 1,
                 }}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600" }}>
+                  <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700" }}>
                     {item.name}
                   </Text>
                   <Text
@@ -151,6 +196,7 @@ export default function Settings() {
                   value={settings[item.key]}
                   onValueChange={(v) => save.mutate({ [item.key]: v })}
                   trackColor={{ false: theme.border, true: theme.accent }}
+                  thumbColor={settings[item.key] ? theme.bg : theme.textDim}
                 />
               </View>
             ))}
