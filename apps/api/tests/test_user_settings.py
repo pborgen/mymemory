@@ -4,7 +4,9 @@ from __future__ import annotations
 from api.user_settings import (
     DEFAULT_SETTINGS,
     FEATURE_CATALOG,
+    GROUP_ORDER,
     merge_settings,
+    ordered_groups,
     patch_settings,
 )
 
@@ -32,3 +34,11 @@ def test_patch_ignores_unknown_keys():
 def test_catalog_covers_every_default_key():
     keys = {item["key"] for item in FEATURE_CATALOG}
     assert keys == set(DEFAULT_SETTINGS)
+
+
+def test_group_order_is_stable():
+    assert ordered_groups() == GROUP_ORDER
+    assert GROUP_ORDER == ["Looking", "Smart chat", "Library", "Devices"]
+    for item in FEATURE_CATALOG:
+        assert item["group"] in GROUP_ORDER
+        assert item.get("subgroup")

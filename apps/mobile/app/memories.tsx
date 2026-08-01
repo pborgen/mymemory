@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Redirect } from "expo-router";
+import { Redirect } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { deleteMemory, fetchMemories, fetchSettings } from "@/api";
+import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import { theme } from "@/theme";
 import type { Memory } from "@/types";
@@ -81,33 +82,19 @@ export default function Memories() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
-      <View
+      <AppBar active="memories" />
+      <Text
         style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
+          color: theme.text,
+          fontSize: 20,
+          fontWeight: "700",
           paddingHorizontal: 18,
-          paddingBottom: 12,
-          borderBottomColor: theme.border,
-          borderBottomWidth: 1,
+          paddingTop: 14,
+          paddingBottom: 4,
         }}
       >
-        <Text style={{ color: theme.text, fontSize: 20, fontWeight: "700" }}>
-          Your memories
-        </Text>
-        <View style={{ flexDirection: "row", gap: 16 }}>
-          <Link href="/settings" asChild>
-            <Pressable hitSlop={8}>
-              <Text style={{ color: theme.accent, fontSize: 15 }}>Settings</Text>
-            </Pressable>
-          </Link>
-          <Link href="/chat" asChild>
-            <Pressable hitSlop={8}>
-              <Text style={{ color: theme.accent, fontSize: 15 }}>Chat ›</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </View>
+        Your memories
+      </Text>
 
       {isLoading ? (
         <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />

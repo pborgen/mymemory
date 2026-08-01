@@ -456,13 +456,22 @@ section.block { padding: 70px 0; border-top: 1px solid var(--border); }
 .app-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 22px;
   height: 60px;
   border-bottom: 1px solid var(--border);
 }
-.app-bar .links { display: flex; gap: 20px; align-items: center; }
-.app-bar .links a,
-.app-bar .links button {
+.app-bar-brand { display: flex; align-items: center; flex-shrink: 0; }
+.app-bar-nav,
+.app-bar-tools {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.app-bar-nav { flex: 1; }
+.app-bar-tools { margin-left: auto; gap: 16px; }
+.app-bar-nav a,
+.app-bar-tools a,
+.app-bar-tools button {
   color: var(--text-dim);
   font-size: 14px;
   background: none;
@@ -470,8 +479,38 @@ section.block { padding: 70px 0; border-top: 1px solid var(--border); }
   padding: 0;
   transition: color 0.15s ease;
 }
-.app-bar .links a:hover,
-.app-bar .links button:hover { color: var(--accent-2); }
+.app-bar-nav a:hover,
+.app-bar-tools a:hover,
+.app-bar-tools button:hover { color: var(--accent-2); }
+.app-bar-nav a.is-active,
+.app-bar-tools a.is-active {
+  color: var(--text);
+  font-weight: 600;
+}
+.app-bar-admin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 14px;
+  margin-left: 2px;
+  border-left: 1px solid var(--border);
+}
+.app-bar-admin-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  opacity: 0.7;
+  font-weight: 700;
+}
+.app-bar-signout { font-weight: 500; }
+@media (max-width: 720px) {
+  .app-bar { gap: 12px; }
+  .app-bar-nav { gap: 12px; }
+  .app-bar-tools { gap: 10px; }
+  .app-bar-admin-label { display: none; }
+  .app-bar-admin { padding-left: 10px; gap: 10px; }
+}
 
 .center-card {
   flex: 1;
@@ -1041,6 +1080,16 @@ section.block { padding: 70px 0; border-top: 1px solid var(--border); }
   color: var(--text-dim);
   max-width: 42ch;
   line-height: 1.45;
+}
+.settings-subgroup { margin-top: 8px; }
+.settings-subgroup + .settings-subgroup { margin-top: 22px; }
+.settings-subgroup-title {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .settings-list {

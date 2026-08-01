@@ -12,18 +12,24 @@ from ..auth import require_user
 from .. import db
 from ..memory import db as mem_db
 from ..memory import engine
-from ..user_settings import FEATURE_CATALOG
+from ..user_settings import FEATURE_CATALOG, GROUP_ORDER, ordered_groups
 
 router = APIRouter()
+
+
+def _settings_payload(settings: dict) -> dict:
+    return {
+        "settings": settings,
+        "catalog": FEATURE_CATALOG,
+        "groupOrder": GROUP_ORDER,
+        "groups": ordered_groups(),
+    }
 
 
 @router.get("/api/settings")
 async def get_settings(email: str = Depends(require_user)):
     settings = await db.get_user_settings(email)
-    return {
-        "settings": settings,
-        "catalog": FEATURE_CATALOG,
-    }
+    return _settings_payload(settings)
 
 
 @router.patch("/api/settings")
@@ -35,7 +41,7 @@ async def patch_settings_route(
     if not isinstance(updates, dict):
         return JSONResponse({"error": "settings object required"}, status_code=400)
     settings = await db.update_user_settings(email, updates)
-    return {"ok": True, "settings": settings, "catalog": FEATURE_CATALOG}
+    return {"ok": True, **_settings_payload(settings)}
 
 
 @router.post("/api/settings/paste-inbox")

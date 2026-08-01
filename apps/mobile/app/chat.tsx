@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Redirect } from "expo-router";
+import { Redirect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { fetchSettings, sendMemoryChat } from "@/api";
+import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import { theme } from "@/theme";
 import type { ChatMessage } from "@/types";
@@ -30,7 +31,7 @@ const GREETING: ChatMessage = {
 };
 
 export default function Chat() {
-  const { isAuthenticated, isLoading, signOut } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
   const sessionId = useRef<string | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
@@ -118,37 +119,7 @@ export default function Chat() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
-      {/* Header */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 18,
-          paddingBottom: 12,
-          borderBottomColor: theme.border,
-          borderBottomWidth: 1,
-        }}
-      >
-        <Text style={{ color: theme.accent, fontSize: 13, letterSpacing: 3, fontWeight: "700" }}>
-          MYMEMORY
-        </Text>
-        <View style={{ flexDirection: "row", gap: 16 }}>
-          <Link href="/memories" asChild>
-            <Pressable hitSlop={8}>
-              <Text style={{ color: theme.textDim, fontSize: 14 }}>Memories</Text>
-            </Pressable>
-          </Link>
-          <Link href="/settings" asChild>
-            <Pressable hitSlop={8}>
-              <Text style={{ color: theme.textDim, fontSize: 14 }}>Settings</Text>
-            </Pressable>
-          </Link>
-          <Pressable hitSlop={8} onPress={() => signOut()}>
-            <Text style={{ color: theme.textDim, fontSize: 14 }}>Sign out</Text>
-          </Pressable>
-        </View>
-      </View>
+      <AppBar active="chat" />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

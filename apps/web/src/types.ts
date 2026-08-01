@@ -63,6 +63,7 @@ export type UserSettings = Record<FeatureFlag, boolean>;
 export interface FeatureCatalogItem {
   key: FeatureFlag;
   group: string;
+  subgroup?: string;
   name: string;
   description: string;
 }
@@ -70,6 +71,8 @@ export interface FeatureCatalogItem {
 export interface SettingsResponse {
   settings: UserSettings;
   catalog: FeatureCatalogItem[];
+  groupOrder?: string[];
+  groups?: string[];
 }
 
 export interface Reminder {

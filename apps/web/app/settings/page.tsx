@@ -16,14 +16,47 @@ import {
 } from "@/api";
 import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
-import type { FeatureFlag, UserSettings } from "@/types";
+import type { FeatureCatalogItem, FeatureFlag, UserSettings } from "@/types";
 
 const GROUP_BLURBS: Record<string, string> = {
-  Chat: "How conversation behaves when you talk to MyMemory.",
-  Memories: "How your saved facts are shown and protected.",
-  Capture: "Ways to bring facts in — and take them out.",
-  Advanced: "Experimental extras. Keep off unless you need them.",
+  Looking: "What shows up in chat and on your Memories list.",
+  "Smart chat": "How MyMemory understands edits, forgets, and answers.",
+  Library: "Bring facts in, export them, or park follow-ups.",
+  Devices: "Voice and Apple extras — keep off unless you need them.",
 };
+
+const DEFAULT_GROUP_ORDER = ["Looking", "Smart chat", "Library", "Devices"];
+
+function buildGroups(
+  catalog: FeatureCatalogItem[],
+  order: string[],
+): [string, FeatureCatalogItem[]][] {
+  const map = new Map<string, FeatureCatalogItem[]>();
+  for (const item of catalog) {
+    const list = map.get(item.group) ?? [];
+    list.push(item);
+    map.set(item.group, list);
+  }
+  const known = order.filter((g) => map.has(g));
+  const extras = [...map.keys()].filter((g) => !order.includes(g)).sort();
+  return [...known, ...extras].map((g) => [g, map.get(g) ?? []]);
+}
+
+function subgroupBlocks(
+  items: FeatureCatalogItem[],
+): { title: string | null; items: FeatureCatalogItem[] }[] {
+  const blocks: { title: string | null; items: FeatureCatalogItem[] }[] = [];
+  for (const item of items) {
+    const title = item.subgroup?.trim() || null;
+    const last = blocks[blocks.length - 1];
+    if (last && last.title === title) {
+      last.items.push(item);
+    } else {
+      blocks.push({ title, items: [item] });
+    }
+  }
+  return blocks;
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -32,7 +65,7 @@ export default function SettingsPage() {
   const [pasteText, setPasteText] = useState("");
   const [importText, setImportText] = useState("");
   const [status, setStatus] = useState<string | null>(null);
-  const [activeGroup, setActiveGroup] = useState<string>("Chat");
+  const [activeGroup, setActiveGroup] = useState<string>("Looking");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/login");
@@ -46,16 +79,16 @@ export default function SettingsPage() {
 
   const settings = data?.settings;
   const catalog = data?.catalog ?? [];
+  const groupOrder = data?.groups?.length
+    ? data.groups
+    : data?.groupOrder?.length
+      ? data.groupOrder
+      : DEFAULT_GROUP_ORDER;
 
-  const groups = useMemo(() => {
-    const map = new Map<string, typeof catalog>();
-    for (const item of catalog) {
-      const list = map.get(item.group) ?? [];
-      list.push(item);
-      map.set(item.group, list);
-    }
-    return [...map.entries()];
-  }, [catalog]);
+  const groups = useMemo(
+    () => buildGroups(catalog, groupOrder),
+    [catalog, groupOrder],
+  );
 
   const enabledCount = useMemo(() => {
     if (!settings) return 0;
@@ -99,6 +132,7 @@ export default function SettingsPage() {
   };
 
   const activeItems = groups.find(([g]) => g === activeGroup)?.[1] ?? [];
+  const blocks = subgroupBlocks(activeItems);
 
   return (
     <div className="app-shell">
@@ -119,7 +153,10 @@ export default function SettingsPage() {
               <span
                 className="settings-meter-fill"
                 style={{
-                  width: `${Math.min(100, (enabledCount / Math.max(1, Object.keys(settings).length)) * 100)}%`,
+                  width: `${Math.min(
+                    100,
+                    (enabledCount / Math.max(1, Object.keys(settings).length)) * 100,
+                  )}%`,
                 }}
               />
             </span>
@@ -162,35 +199,44 @@ export default function SettingsPage() {
             <p>{GROUP_BLURBS[activeGroup] ?? "Optional capabilities for this area."}</p>
           </header>
 
-          <ul className="settings-list">
-            {activeItems.map((item, i) => {
-              const on = settings[item.key];
-              return (
-                <li
-                  key={item.key}
-                  className={`settings-row ${on ? "is-on" : ""}`}
-                  style={{ animationDelay: `${i * 45}ms` }}
-                >
-                  <div className="settings-row-text">
-                    <div className="settings-name">{item.name}</div>
-                    <div className="settings-desc">{item.description}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`settings-switch ${on ? "on" : ""}`}
-                    aria-pressed={on}
-                    aria-label={`${item.name}: ${on ? "on" : "off"}`}
-                    onClick={() => toggle(item.key)}
-                  >
-                    <span className="settings-switch-knob" />
-                    <span className="settings-switch-label">{on ? "On" : "Off"}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          {blocks.map((block) => (
+            <div key={block.title ?? "default"} className="settings-subgroup">
+              {block.title ? (
+                <h3 className="settings-subgroup-title">{block.title}</h3>
+              ) : null}
+              <ul className="settings-list">
+                {block.items.map((item, i) => {
+                  const on = settings[item.key];
+                  return (
+                    <li
+                      key={item.key}
+                      className={`settings-row ${on ? "is-on" : ""}`}
+                      style={{ animationDelay: `${i * 45}ms` }}
+                    >
+                      <div className="settings-row-text">
+                        <div className="settings-name">{item.name}</div>
+                        <div className="settings-desc">{item.description}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`settings-switch ${on ? "on" : ""}`}
+                        aria-pressed={on}
+                        aria-label={`${item.name}: ${on ? "on" : "off"}`}
+                        onClick={() => toggle(item.key)}
+                      >
+                        <span className="settings-switch-knob" />
+                        <span className="settings-switch-label">
+                          {on ? "On" : "Off"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
 
-          {activeGroup === "Capture" && settings.pasteInbox ? (
+          {activeGroup === "Library" && settings.pasteInbox ? (
             <div className="settings-tool">
               <h3>Paste inbox</h3>
               <textarea
@@ -219,7 +265,7 @@ export default function SettingsPage() {
             </div>
           ) : null}
 
-          {activeGroup === "Capture" && settings.importExport ? (
+          {activeGroup === "Library" && settings.importExport ? (
             <div className="settings-tool">
               <h3>Import / export</h3>
               <div className="settings-actions">
@@ -295,7 +341,7 @@ export default function SettingsPage() {
             </div>
           ) : null}
 
-          {activeGroup === "Capture" && settings.reminders ? (
+          {activeGroup === "Library" && settings.reminders ? (
             <div className="settings-tool">
               <h3>Reminders</h3>
               <p className="settings-desc">
@@ -324,7 +370,7 @@ export default function SettingsPage() {
             </div>
           ) : null}
 
-          {activeGroup === "Advanced" && settings.iosIntegrations ? (
+          {activeGroup === "Devices" && settings.iosIntegrations ? (
             <div className="settings-tool">
               <h3>iOS tips</h3>
               <p className="settings-desc">

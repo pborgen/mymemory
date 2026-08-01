@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, Redirect, useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { fetchPrompts } from "@/api";
+import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import { theme } from "@/theme";
 import type { Prompt } from "@/types";
@@ -35,26 +36,19 @@ export default function Prompts() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
-      <View
+      <AppBar active="prompts" />
+      <Text
         style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
+          color: theme.text,
+          fontSize: 20,
+          fontWeight: "700",
           paddingHorizontal: 18,
-          paddingBottom: 12,
-          borderBottomColor: theme.border,
-          borderBottomWidth: 1,
+          paddingTop: 14,
+          paddingBottom: 4,
         }}
       >
-        <Text style={{ color: theme.text, fontSize: 20, fontWeight: "700" }}>
-          Prompts
-        </Text>
-        <Link href="/memories" asChild>
-          <Pressable hitSlop={8}>
-            <Text style={{ color: theme.accent, fontSize: 15 }}>Memories ›</Text>
-          </Pressable>
-        </Link>
-      </View>
+        Prompts
+      </Text>
 
       {isLoading ? (
         <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />

@@ -134,6 +134,9 @@ export const pasteInbox = (text: string) =>
     text,
   });
 
+export const exportMemoriesJson = () =>
+  apiFetch<{ count: number; memories: Memory[] }>("GET", "/api/settings/export");
+
 export const importMemoriesText = (text: string) =>
   apiFetch<{ ok: boolean; count: number }>("POST", "/api/settings/import", {
     text,
