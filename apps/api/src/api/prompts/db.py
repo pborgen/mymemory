@@ -102,16 +102,17 @@ async def seed_prompts() -> None:
 
 
 async def _ensure_remember_gate_classifier() -> None:
-    """Activate the 3-way store|recall|chat classifier if still on the old 2-way prompt.
+    """Activate the store|recall|chat|forget classifier when the active prompt is stale.
 
-    Does not overwrite custom edits that already include a chat action.
+    Upgrades older 2-way / 3-way seeds. Does not overwrite custom edits that
+    already include a forget action.
     """
     key = "memory.classifier"
     current = await get_active_resolved(key)
     if not current:
         return
     content = current["content"] or ""
-    if '"chat"' in content and "durable" in content.lower():
+    if '"forget"' in content and "durable" in content.lower():
         return
     new_content = DEFAULTS_BY_KEY[key]["content"]
     if content.strip() == new_content.strip():
@@ -120,7 +121,7 @@ async def _ensure_remember_gate_classifier() -> None:
         key,
         new_content,
         by="system",
-        change_note="Remember-gate: only store durable facts; chat skips memory",
+        change_note="Remember-gate: add forget-last; only store durable facts",
         activate=True,
     )
     from . import store as prompt_store

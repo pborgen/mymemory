@@ -135,6 +135,46 @@ async def test_chat_store_path(client, auth):
     assert any("Rex" in m["content"] for m in listed.json())
 
 
+async def test_chat_forget_last_memory(client, auth):
+    await client.post(
+        "/api/memory/chat",
+        json={"message": "My dog's name is Rex"},
+        headers=auth,
+    )
+    await client.post(
+        "/api/memory/chat",
+        json={"message": "My favorite color is teal"},
+        headers=auth,
+    )
+
+    resp = await client.post(
+        "/api/memory/chat",
+        json={"message": "Forget the last memory you stored"},
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["action"] == "forgotten"
+    assert "teal" in body["answer"].lower()
+
+    listed = await client.get("/api/memory", headers=auth)
+    contents = [m["content"] for m in listed.json()]
+    assert any("Rex" in c for c in contents)
+    assert not any("teal" in c.lower() for c in contents)
+
+
+async def test_chat_forget_when_empty(client, auth):
+    resp = await client.post(
+        "/api/memory/chat",
+        json={"message": "delete the last thing you saved"},
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["action"] == "forgotten"
+    assert "nothing" in body["answer"].lower()
+
+
 async def test_chat_recall_path(client, auth):
     await client.post("/api/memory/chat", json={"message": "My favorite color is teal"}, headers=auth)
     resp = await client.post(

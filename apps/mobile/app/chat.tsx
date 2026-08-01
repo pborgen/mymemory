@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Redirect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { sendMemoryChat } from "@/api";
+import { fetchSettings, sendMemoryChat } from "@/api";
 import { useAuth } from "@/auth";
 import { theme } from "@/theme";
 import type { ChatMessage } from "@/types";
@@ -41,6 +41,13 @@ export default function Chat() {
     setInput(text),
   );
 
+  const { data: settingsData } = useQuery({
+    queryKey: ["settings"],
+    queryFn: fetchSettings,
+    enabled: isAuthenticated,
+  });
+  const showSources = !!settingsData?.settings.showSources;
+
   const mutation = useMutation({
     mutationFn: (message: string) => sendMemoryChat(message, sessionId.current),
     onSuccess: (res) => {
@@ -53,10 +60,18 @@ export default function Chat() {
           content: res.answer,
           action: res.action,
           sources: res.sources,
+          chips: res.chips,
         },
       ]);
-      if (res.action === "stored") {
+      if (
+        res.action === "stored" ||
+        res.action === "forgotten" ||
+        res.action === "updated"
+      ) {
         queryClient.invalidateQueries({ queryKey: ["memories"] });
+      }
+      if (res.action === "reminded") {
+        queryClient.invalidateQueries({ queryKey: ["reminders"] });
       }
     },
     onError: (err: Error) => {
@@ -67,14 +82,30 @@ export default function Chat() {
     },
   });
 
-  const send = useCallback(() => {
-    const text = input.trim();
-    if (!text || mutation.isPending) return;
-    if (listening) stop();
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: text }]);
-    setInput("");
-    mutation.mutate(text);
-  }, [input, mutation, listening, stop]);
+  const sendText = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || mutation.isPending) return;
+      if (listening) stop();
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), role: "user", content: trimmed },
+      ]);
+      setInput("");
+      mutation.mutate(trimmed);
+    },
+    [mutation, listening, stop],
+  );
+
+  const send = useCallback(() => sendText(input), [input, sendText]);
+
+  const onChip = useCallback(
+    (chipId: string) => {
+      if (chipId === "undo") sendText("Forget the last memory you stored");
+      else if (chipId === "ask") setInput("What do you remember about ");
+    },
+    [sendText],
+  );
 
   if (isLoading) {
     return (
@@ -102,10 +133,15 @@ export default function Chat() {
         <Text style={{ color: theme.accent, fontSize: 13, letterSpacing: 3, fontWeight: "700" }}>
           MYMEMORY
         </Text>
-        <View style={{ flexDirection: "row", gap: 18 }}>
+        <View style={{ flexDirection: "row", gap: 16 }}>
           <Link href="/memories" asChild>
             <Pressable hitSlop={8}>
               <Text style={{ color: theme.textDim, fontSize: 14 }}>Memories</Text>
+            </Pressable>
+          </Link>
+          <Link href="/settings" asChild>
+            <Pressable hitSlop={8}>
+              <Text style={{ color: theme.textDim, fontSize: 14 }}>Settings</Text>
             </Pressable>
           </Link>
           <Pressable hitSlop={8} onPress={() => signOut()}>
@@ -125,7 +161,9 @@ export default function Chat() {
           keyExtractor={(m) => m.id}
           contentContainerStyle={{ padding: 16, gap: 12 }}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-          renderItem={({ item }) => <Bubble message={item} />}
+          renderItem={({ item }) => (
+            <Bubble message={item} showSources={showSources} onChip={onChip} />
+          )}
         />
 
         {mutation.isPending && (
@@ -222,7 +260,15 @@ export default function Chat() {
   );
 }
 
-function Bubble({ message }: { message: ChatMessage }) {
+function Bubble({
+  message,
+  showSources,
+  onChip,
+}: {
+  message: ChatMessage;
+  showSources: boolean;
+  onChip: (id: string) => void;
+}) {
   const isUser = message.role === "user";
   return (
     <View style={{ alignItems: isUser ? "flex-end" : "flex-start" }}>
@@ -239,11 +285,21 @@ function Bubble({ message }: { message: ChatMessage }) {
           paddingHorizontal: 15,
         }}
       >
-        {message.action === "stored" && (
+        {message.action === "stored" ? (
           <Text style={{ color: theme.accent, fontSize: 11, letterSpacing: 1, marginBottom: 4 }}>
             {"✓ SAVED"}
           </Text>
-        )}
+        ) : null}
+        {message.action === "forgotten" ? (
+          <Text style={{ color: theme.danger, fontSize: 11, letterSpacing: 1, marginBottom: 4 }}>
+            {"✕ FORGOTTEN"}
+          </Text>
+        ) : null}
+        {message.action === "updated" ? (
+          <Text style={{ color: theme.accent, fontSize: 11, letterSpacing: 1, marginBottom: 4 }}>
+            {"✎ UPDATED"}
+          </Text>
+        ) : null}
         <Text
           style={{
             color: isUser ? theme.userText : theme.text,
@@ -253,6 +309,38 @@ function Bubble({ message }: { message: ChatMessage }) {
         >
           {message.content}
         </Text>
+        {showSources && message.sources && message.sources.length > 0 ? (
+          <View style={{ marginTop: 8, paddingTop: 8, borderTopColor: theme.border, borderTopWidth: 1 }}>
+            <Text style={{ color: theme.textDim, fontSize: 11, marginBottom: 4 }}>
+              Why this answer
+            </Text>
+            {message.sources.map((s) => (
+              <Text key={s.id} style={{ color: theme.textDim, fontSize: 12, lineHeight: 17 }}>
+                • {s.content}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        {message.chips && message.chips.length > 0 ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+            {message.chips.map((c) => (
+              <Pressable
+                key={c.id}
+                onPress={() => onChip(c.id)}
+                style={{
+                  borderColor: theme.border,
+                  borderWidth: 1,
+                  borderRadius: 999,
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  backgroundColor: theme.surfaceAlt,
+                }}
+              >
+                <Text style={{ color: theme.text, fontSize: 13 }}>{c.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </View>
     </View>
   );

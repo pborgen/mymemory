@@ -41,3 +41,35 @@ def test_resolve_route_upgrades_durable_statements():
         "What's my coffee order?",
         {"action": "store", "fact": "coffee"},
     )["action"] == "recall"
+
+
+def test_forget_last_phrases():
+    assert rg.is_forget_last("Forget the last memory you stored")
+    assert rg.is_forget_last("please delete the last thing you saved")
+    assert rg.is_forget_last("undo what you just remembered")
+    assert rg.is_forget_last("Forget the last memories you stored?")
+    # Content-specific delete is not this path.
+    assert not rg.is_forget_last("forget my wifi password")
+    assert not rg.is_forget_last("What's my license plate?")
+
+
+def test_resolve_route_forget_beats_question():
+    assert rg.resolve_route(
+        "Forget the last memory?",
+        {"action": "recall", "fact": ""},
+    )["action"] == "forget"
+    # Hallucinated forget on a greeting must not delete memories.
+    assert rg.resolve_route(
+        "hi",
+        {"action": "forget", "fact": ""},
+    )["action"] == "chat"
+
+
+def test_forget_topic_and_edit_and_remind():
+    assert rg.forget_topic_query("Forget my wifi password") == "wifi password"
+    assert rg.is_edit_correct("Actually my plate is 8XYZ456")
+    assert rg.reminder_content("remind me to call Jenna") == "call Jenna"
+    assert rg.resolve_route(
+        "Forget my wifi password",
+        {"action": "chat", "fact": ""},
+    )["action"] == "forget_topic"

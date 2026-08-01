@@ -17,7 +17,7 @@ from . import langfuse_tracing as lf
 from .memory.db import ensure_memory_tables
 from .prompts import store as prompt_store
 from .prompts.db import ensure_prompt_tables, seed_prompts
-from .routers import admins, auth, memory, prompts
+from .routers import admins, auth, memory, prompts, settings
 
 
 @asynccontextmanager
@@ -79,7 +79,7 @@ async def unhandled_exception_handler(_: Request, exc: Exception):
 
 # ── API routers ───────────────────────────────────────────
 
-for module in (auth, admins, memory, prompts):
+for module in (auth, admins, memory, prompts, settings):
     app.include_router(module.router)
 
 

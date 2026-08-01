@@ -41,7 +41,7 @@ def _flatten(system: str, messages: list[dict]) -> list[dict]:
 _ROUTER_SYSTEM = """You route messages for a personal memory assistant.
 
 Decide ONE action. Respond with ONLY a JSON object (no prose, no markdown):
-{"action": "store" | "recall" | "chat", "fact": "<string>"}
+{"action": "store" | "recall" | "chat" | "forget", "fact": "<string>"}
 
 ## store — ONLY durable personal facts worth saving long-term
 Examples: license plate, birthday, preferred name, address, loan number, rate lock,
@@ -59,6 +59,12 @@ If unsure whether it is a lasting fact → use "chat", not "store".
 ## recall — the user is asking for something they may have saved
 Examples: "what's my license plate?", "when is Jenna's birthday?"
 Set "fact" to "".
+
+## forget — undo the most recently stored memory
+Examples: "forget the last memory", "delete the last thing you stored",
+"undo what you just saved". Set "fact" to "".
+Do NOT use forget for "forget my wifi password" (that is recall/delete-by-content —
+use recall for now).
 
 ## chat — everything else
 Greetings, thanks, how-you-work questions, empty chatter. Set "fact" to "".
@@ -82,7 +88,10 @@ and briefly suggest they tell you so you can remember it.
 _CLASSIFY_SCHEMA = {
     "type": "object",
     "properties": {
-        "action": {"type": "string", "enum": ["store", "recall", "chat"]},
+        "action": {
+            "type": "string",
+            "enum": ["store", "recall", "chat", "forget"],
+        },
         "fact": {"type": "string"},
     },
     "required": ["action", "fact"],
@@ -218,11 +227,15 @@ def _classify_sync(
     try:
         data = json.loads(text)
         action = data.get("action")
-        if action not in ("store", "recall", "chat"):
+        if action not in ("store", "recall", "chat", "forget"):
             raise ValueError("bad action")
         return {"action": action, "fact": (data.get("fact") or "").strip()}
     except Exception:
-        # Prefer recall for questions; otherwise chat — never invent a store.
+        # Prefer forget / recall heuristics; otherwise chat — never invent a store.
+        from . import remember_gate as rg
+
+        if rg.is_forget_last(message):
+            return {"action": "forget", "fact": ""}
         q = message.strip()
         if q.endswith("?") or q.lower().split(" ", 1)[0] in {
             "what", "when", "where", "who", "how", "which", "why",

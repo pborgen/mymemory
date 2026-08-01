@@ -16,16 +16,74 @@ export interface MemorySource {
   similarity: number;
 }
 
+export type FeatureFlag =
+  | "quickChips"
+  | "showSources"
+  | "forgetByTopic"
+  | "editCorrect"
+  | "conflictDetection"
+  | "timeAwareAnswers"
+  | "entityCards"
+  | "sensitiveLock"
+  | "pasteInbox"
+  | "importExport"
+  | "reminders"
+  | "whisperMic"
+  | "iosIntegrations";
+
+export type UserSettings = Record<FeatureFlag, boolean>;
+
+export interface FeatureCatalogItem {
+  key: FeatureFlag;
+  group: string;
+  name: string;
+  description: string;
+}
+
+export interface SettingsResponse {
+  settings: UserSettings;
+  catalog: FeatureCatalogItem[];
+}
+
+export interface Reminder {
+  id: string;
+  content: string;
+  dueAt?: string | null;
+  doneAt?: string | null;
+  createdAt: string;
+}
+
+export interface ChatChip {
+  id: string;
+  label: string;
+}
+
 export interface ChatResponse {
   answer: string;
-  action: "stored" | "recalled";
+  action:
+    | "stored"
+    | "recalled"
+    | "forgotten"
+    | "updated"
+    | "reminded"
+    | "chat"
+    | "blocked"
+    | "error";
   sources: MemorySource[];
+  chips?: ChatChip[];
   sessionId: string;
-  /** Prompt keys → version pins used for this turn (prompt ops / debugging). */
   promptVersions?: Record<
     string,
     { version: number | null; versionId: string | null; source: string }
   >;
+}
+
+export interface MemoryEntity {
+  id: string;
+  name: string;
+  key: string;
+  type: string;
+  memoryCount?: number;
 }
 
 export interface Memory {
@@ -33,6 +91,8 @@ export interface Memory {
   content: string;
   source: string;
   createdAt: string;
+  sensitivity?: string;
+  entities?: MemoryEntity[];
 }
 
 export interface Prompt {
@@ -59,6 +119,7 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  action?: "stored" | "recalled";
+  action?: ChatResponse["action"];
   sources?: MemorySource[];
+  chips?: ChatChip[];
 }

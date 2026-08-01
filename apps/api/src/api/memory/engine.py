@@ -23,9 +23,13 @@ from .entities import link_entities_for_memory
 from .generation import classify_and_normalize, generate_answer
 from .retrieval import retrieve_relevant_memories
 from .. import config
+from .. import db as api_db
 from .. import langfuse_tracing as lf
 from .. import observability as obs
 from ..prompts import store as prompt_store
+
+_CONFLICT_SIMILARITY = 0.88
+_TOPIC_DELETE_SIMILARITY = 0.35
 
 
 def _pin(resolved: dict) -> dict:
@@ -151,7 +155,7 @@ async def _finish(
         pass
     if lf.enabled():
         lf.flush()
-    return {
+    out = {
         "answer": answer,
         "action": action,
         "sources": sources,
@@ -162,7 +166,9 @@ async def _finish(
         "emptyRetrieval": empty_retrieval,
         "guardrail": guardrail or None,
         "langfuseTraceId": langfuse_trace_id,
+        "chips": [],
     }
+    return out
 
 
 async def handle_message(
@@ -293,7 +299,63 @@ async def _handle_message_traced(
     ]
 
     t = obs.Timer()
-    # Cheap pre-filter: never call the classifier for obvious chitchat.
+    settings = await api_db.get_user_settings(email)
+
+    # Cheap pre-filters: feature intents / chitchat skip the classifier.
+    if rg.is_forget_last(message):
+        timings["classify"] = t.stop()
+        return await _forget_last_memory(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+            settings=settings,
+        )
+
+    if settings.get("reminders") and rg.is_reminder(message):
+        timings["classify"] = t.stop()
+        return await _create_reminder_from_chat(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+        )
+
+    if settings.get("forgetByTopic") and rg.is_forget_topic(message):
+        timings["classify"] = t.stop()
+        return await _forget_topic_memory(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+        )
+
+    if settings.get("editCorrect") and rg.is_edit_correct(message):
+        timings["classify"] = t.stop()
+        return await _update_matching_memory(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+            settings=settings,
+        )
+
     if rg.is_obvious_chat(message):
         timings["classify"] = t.stop()
         timings["total"] = total.stop()
@@ -339,6 +401,59 @@ async def _handle_message_traced(
     timings["classify"] = t.stop()
 
     route = rg.resolve_route(message, route)
+
+    if route["action"] == "forget":
+        return await _forget_last_memory(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+            settings=settings,
+        )
+
+    if route["action"] == "forget_topic" and settings.get("forgetByTopic"):
+        return await _forget_topic_memory(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+            topic=route.get("fact") or None,
+        )
+
+    if route["action"] == "remind" and settings.get("reminders"):
+        return await _create_reminder_from_chat(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+            content=route.get("fact") or None,
+        )
+
+    if route["action"] == "update" and settings.get("editCorrect"):
+        return await _update_matching_memory(
+            email=email,
+            session_id=session_id,
+            message=message,
+            request_id=request_id,
+            total=total,
+            timings=timings,
+            prompt_versions=prompt_versions,
+            root=root,
+            settings=settings,
+            fact=route.get("fact") or message.strip(),
+        )
 
     if route["action"] == "chat":
         timings["total"] = total.stop()
@@ -403,6 +518,40 @@ async def _handle_message_traced(
         fact = route["fact"]
         if message.lstrip().upper().startswith("CONFIRM_SENSITIVE"):
             fact = re_sub_confirm(fact)
+
+        # Conflict detection: overlapping fact → update the older memory in place.
+        if settings.get("conflictDetection"):
+            overlaps = await retrieve_relevant_memories(
+                email, fact, top_k=3, min_similarity=_CONFLICT_SIMILARITY
+            )
+            if overlaps:
+                old = overlaps[0]
+                embedding = await embed(fact)
+                updated = await db.update_memory_content(
+                    email, str(old["id"]), fact, embedding
+                )
+                timings["embed"] = t.stop()
+                if updated:
+                    memory_ids = [updated["id"]]
+                    answer = (
+                        f"Updated your earlier note — I'll remember: {updated['content']}"
+                    )
+                    timings["total"] = total.stop()
+                    result = await _finish(
+                        email=email,
+                        session_id=session_id,
+                        message=message,
+                        answer=answer,
+                        action="updated",
+                        sources=[],
+                        request_id=request_id,
+                        prompt_versions=prompt_versions,
+                        timings=timings,
+                        empty_retrieval=False,
+                        memory_ids=memory_ids,
+                    )
+                    return _with_chips(result, settings, action="updated")
+
         with lf.observation(
             root,
             name="embed-memory",
@@ -429,7 +578,7 @@ async def _handle_message_traced(
             output=[{"role": "assistant", "content": answer}],
             metadata={"action": "stored", "memoryIds": memory_ids},
         )
-        return await _finish(
+        result = await _finish(
             email=email,
             session_id=session_id,
             message=message,
@@ -442,6 +591,7 @@ async def _handle_message_traced(
             empty_retrieval=False,
             memory_ids=memory_ids,
         )
+        return _with_chips(result, settings, action="stored")
 
     # ── Retrieval floor (authz already via email scope) ───────────
     t = obs.Timer()
@@ -458,6 +608,16 @@ async def _handle_message_traced(
             top_k=6,
             min_similarity=config.RETRIEVAL_MIN_SIMILARITY,
         )
+        if settings.get("timeAwareAnswers") and memories:
+            # Prefer newer rows when similarity is close (stable sort: -created, -sim).
+            memories = sorted(
+                memories,
+                key=lambda m: (
+                    m.get("createdAt") or 0,
+                    float(m.get("similarity") or 0),
+                ),
+                reverse=True,
+            )
         lf.update_observation(
             ret,
             output={
@@ -588,6 +748,309 @@ async def _handle_message_traced(
         empty_retrieval=False,
         memory_ids=memory_ids,
         guardrail=guardrail,
+    )
+
+
+def _with_chips(result: dict, settings: dict, *, action: str) -> dict:
+    if not settings.get("quickChips"):
+        return result
+    if action in ("stored", "updated"):
+        result["chips"] = [
+            {"id": "undo", "label": "Undo save"},
+            {"id": "ask", "label": "Ask me later"},
+        ]
+    return result
+
+
+async def _create_reminder_from_chat(
+    *,
+    email: str,
+    session_id: str,
+    message: str,
+    request_id: str,
+    total: obs.Timer,
+    timings: dict[str, int],
+    prompt_versions: dict,
+    root: object | None,
+    content: str | None = None,
+) -> dict:
+    text = (content or rg.reminder_content(message) or "").strip()
+    if not text:
+        text = message.strip()
+    reminder = await db.insert_reminder(str(uuid.uuid4()), email, text)
+    answer = f"Reminder saved: {reminder['content']}. Manage these under Settings."
+    timings["total"] = total.stop()
+    lf.update_observation(
+        root,
+        output=[{"role": "assistant", "content": answer}],
+        metadata={"action": "reminded", "reminderId": reminder["id"]},
+    )
+    return await _finish(
+        email=email,
+        session_id=session_id,
+        message=message,
+        answer=answer,
+        action="reminded",
+        sources=[],
+        request_id=request_id,
+        prompt_versions=prompt_versions,
+        timings=timings,
+        empty_retrieval=False,
+        memory_ids=[],
+    )
+
+
+_STOP_TOPIC = frozenset(
+    {
+        "a", "an", "the", "my", "me", "please", "forget", "delete", "remove",
+        "erase", "about", "that", "this", "from", "your", "you", "saved",
+        "memory", "memories",
+    }
+)
+
+
+async def _match_topic_memory(email: str, query: str) -> dict | None:
+    """Best memory for a topic delete — vector hit, else keyword overlap."""
+    hits = await retrieve_relevant_memories(
+        email, query, top_k=3, min_similarity=_TOPIC_DELETE_SIMILARITY
+    )
+    if hits:
+        return hits[0]
+    tokens = [
+        t
+        for t in re.findall(r"[a-z0-9]+", query.lower())
+        if t not in _STOP_TOPIC and len(t) > 1
+    ]
+    if not tokens:
+        return None
+    best: tuple[int, dict] | None = None
+    for mem in await db.list_memories(email):
+        content = (mem.get("content") or "").lower()
+        score = sum(1 for t in tokens if t in content)
+        if score and (best is None or score > best[0]):
+            best = (score, mem)
+    return best[1] if best else None
+
+
+async def _forget_topic_memory(
+    *,
+    email: str,
+    session_id: str,
+    message: str,
+    request_id: str,
+    total: obs.Timer,
+    timings: dict[str, int],
+    prompt_versions: dict,
+    root: object | None,
+    topic: str | None = None,
+) -> dict:
+    query = (topic or rg.forget_topic_query(message) or message).strip()
+    target = await _match_topic_memory(email, query)
+    if not target:
+        answer = f"I couldn't find a saved memory matching “{query}”."
+        timings["total"] = total.stop()
+        return await _finish(
+            email=email,
+            session_id=session_id,
+            message=message,
+            answer=answer,
+            action="forgotten",
+            sources=[],
+            request_id=request_id,
+            prompt_versions=prompt_versions,
+            timings=timings,
+            empty_retrieval=True,
+            memory_ids=[],
+        )
+    memory_id = str(target["id"])
+    await db.delete_memory(email, memory_id)
+    answer = f"Forgotten — removed: {target.get('content') or ''}"
+    timings["total"] = total.stop()
+    lf.update_observation(
+        root,
+        output=[{"role": "assistant", "content": answer}],
+        metadata={"action": "forgotten", "memoryIds": [memory_id]},
+    )
+    return await _finish(
+        email=email,
+        session_id=session_id,
+        message=message,
+        answer=answer,
+        action="forgotten",
+        sources=[],
+        request_id=request_id,
+        prompt_versions=prompt_versions,
+        timings=timings,
+        empty_retrieval=False,
+        memory_ids=[memory_id],
+    )
+
+
+async def _update_matching_memory(
+    *,
+    email: str,
+    session_id: str,
+    message: str,
+    request_id: str,
+    total: obs.Timer,
+    timings: dict[str, int],
+    prompt_versions: dict,
+    root: object | None,
+    settings: dict,
+    fact: str | None = None,
+) -> dict:
+    new_fact = (fact or message).strip()
+    # Strip leading correction cues for a cleaner stored statement.
+    new_fact = re.sub(
+        r"^\s*(actually|correction:|correct that[,:]?|no,? it'?s|it'?s actually)\s*",
+        "",
+        new_fact,
+        flags=re.I,
+    ).strip() or message.strip()
+    hits = await retrieve_relevant_memories(
+        email, new_fact, top_k=3, min_similarity=0.2
+    )
+    if not hits:
+        # Nothing to update — fall through to a normal store.
+        stored = await store_fact(email, new_fact, "chat")
+        answer = f"Got it — I'll remember that: {stored['content']}"
+        timings["total"] = total.stop()
+        result = await _finish(
+            email=email,
+            session_id=session_id,
+            message=message,
+            answer=answer,
+            action="stored",
+            sources=[],
+            request_id=request_id,
+            prompt_versions=prompt_versions,
+            timings=timings,
+            empty_retrieval=False,
+            memory_ids=[stored["id"]],
+        )
+        return _with_chips(result, settings, action="stored")
+
+    old = hits[0]
+    embedding = await embed(new_fact)
+    updated = await db.update_memory_content(
+        email, str(old["id"]), new_fact, embedding
+    )
+    timings["total"] = total.stop()
+    if not updated:
+        answer = "I couldn't update that memory — try again."
+        return await _finish(
+            email=email,
+            session_id=session_id,
+            message=message,
+            answer=answer,
+            action="blocked",
+            sources=[],
+            request_id=request_id,
+            prompt_versions=prompt_versions,
+            timings=timings,
+            empty_retrieval=False,
+            memory_ids=[],
+            guardrail="update_failed",
+        )
+    answer = f"Updated — I'll remember: {updated['content']}"
+    result = await _finish(
+        email=email,
+        session_id=session_id,
+        message=message,
+        answer=answer,
+        action="updated",
+        sources=[],
+        request_id=request_id,
+        prompt_versions=prompt_versions,
+        timings=timings,
+        empty_retrieval=False,
+        memory_ids=[updated["id"]],
+    )
+    return _with_chips(result, settings, action="updated")
+
+
+async def _forget_last_memory(
+    *,
+    email: str,
+    session_id: str,
+    message: str,
+    request_id: str,
+    total: obs.Timer,
+    timings: dict[str, int],
+    prompt_versions: dict,
+    root: object | None,
+    settings: dict | None = None,
+) -> dict:
+    """Soft-delete the user's newest memory and confirm what was removed."""
+    latest = await db.latest_memory(email)
+    if not latest:
+        answer = "There's nothing saved yet for me to forget."
+        timings["total"] = total.stop()
+        lf.update_observation(
+            root,
+            output=[{"role": "assistant", "content": answer}],
+            metadata={"action": "forgotten", "memoryIds": []},
+        )
+        return await _finish(
+            email=email,
+            session_id=session_id,
+            message=message,
+            answer=answer,
+            action="forgotten",
+            sources=[],
+            request_id=request_id,
+            prompt_versions=prompt_versions,
+            timings=timings,
+            empty_retrieval=False,
+            memory_ids=[],
+        )
+
+    memory_id = str(latest["id"])
+    deleted = await db.delete_memory(email, memory_id)
+    if not deleted:
+        answer = "I couldn't remove that memory — try again in a moment."
+        timings["total"] = total.stop()
+        lf.update_observation(
+            root,
+            output=[{"role": "assistant", "content": answer}],
+            metadata={"action": "forgotten", "memoryIds": []},
+            level="WARNING",
+        )
+        return await _finish(
+            email=email,
+            session_id=session_id,
+            message=message,
+            answer=answer,
+            action="forgotten",
+            sources=[],
+            request_id=request_id,
+            prompt_versions=prompt_versions,
+            timings=timings,
+            empty_retrieval=False,
+            memory_ids=[],
+        )
+
+    content = latest.get("content") or ""
+    answer = f"Forgotten — I removed the last thing I saved: {content}"
+    memory_ids = [memory_id]
+    timings["total"] = total.stop()
+    lf.update_observation(
+        root,
+        output=[{"role": "assistant", "content": answer}],
+        metadata={"action": "forgotten", "memoryIds": memory_ids},
+    )
+    return await _finish(
+        email=email,
+        session_id=session_id,
+        message=message,
+        answer=answer,
+        action="forgotten",
+        sources=[],
+        request_id=request_id,
+        prompt_versions=prompt_versions,
+        timings=timings,
+        empty_retrieval=False,
+        memory_ids=memory_ids,
     )
 
 

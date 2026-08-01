@@ -1,10 +1,10 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { sendMemoryChat } from "@/api";
+import { fetchSettings, sendMemoryChat } from "@/api";
 import { AppBar } from "@/AppBar";
 import { useAuth } from "@/auth";
 import type { ChatMessage } from "@/types";
@@ -30,6 +30,13 @@ export default function Chat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { available: voiceAvailable, listening, toggle, stop } = useVoice(setInput);
 
+  const { data: settingsData } = useQuery({
+    queryKey: ["settings"],
+    queryFn: fetchSettings,
+    enabled: isAuthenticated,
+  });
+  const showSources = !!settingsData?.settings.showSources;
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/login");
   }, [isLoading, isAuthenticated, router]);
@@ -46,11 +53,19 @@ export default function Chat() {
           content: res.answer,
           action: res.action,
           sources: res.sources,
+          chips: res.chips,
           requestId: res.requestId,
         },
       ]);
-      if (res.action === "stored") {
+      if (
+        res.action === "stored" ||
+        res.action === "forgotten" ||
+        res.action === "updated"
+      ) {
         queryClient.invalidateQueries({ queryKey: ["memories"] });
+      }
+      if (res.action === "reminded") {
+        queryClient.invalidateQueries({ queryKey: ["reminders"] });
       }
     },
     onError: (err: Error) => {
@@ -61,18 +76,24 @@ export default function Chat() {
     },
   });
 
-  // Keep the conversation pinned to the latest message.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, mutation.isPending]);
 
-  const send = () => {
-    const text = input.trim();
-    if (!text || mutation.isPending) return;
+  const sendText = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || mutation.isPending) return;
     if (listening) stop();
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: text }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: trimmed }]);
     setInput("");
-    mutation.mutate(text);
+    mutation.mutate(trimmed);
+  };
+
+  const send = () => sendText(input);
+
+  const onChip = (chipId: string) => {
+    if (chipId === "undo") sendText("Forget the last memory you stored");
+    else if (chipId === "ask") setInput("What do you remember about ");
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -99,7 +120,12 @@ export default function Chat() {
         <div className="chat-scroll" ref={scrollRef}>
           <div className="chat-msgs">
             {messages.map((m) => (
-              <Bubble key={m.id} message={m} />
+              <Bubble
+                key={m.id}
+                message={m}
+                showSources={showSources}
+                onChip={onChip}
+              />
             ))}
             {mutation.isPending && <div className="thinking">thinking…</div>}
           </div>
@@ -159,26 +185,68 @@ function MicIcon() {
   );
 }
 
-function Bubble({ message }: { message: ChatMessage }) {
+function actionTag(action: ChatMessage["action"]): string | null {
+  switch (action) {
+    case "stored":
+      return "✓ Stored";
+    case "recalled":
+      return "↩ Recalled";
+    case "forgotten":
+      return "✕ Forgotten";
+    case "updated":
+      return "✎ Updated";
+    case "reminded":
+      return "⏰ Reminder";
+    case "chat":
+    case "blocked":
+    case "error":
+    case undefined:
+      return null;
+    default: {
+      const _exhaustive: never = action;
+      return _exhaustive;
+    }
+  }
+}
+
+function Bubble({
+  message,
+  showSources,
+  onChip,
+}: {
+  message: ChatMessage;
+  showSources: boolean;
+  onChip: (id: string) => void;
+}) {
   const isUser = message.role === "user";
-  const tag =
-    message.action === "stored"
-      ? "✓ Stored"
-      : message.action === "recalled"
-        ? "↩ Recalled"
-        : null;
+  const tag = actionTag(message.action);
 
   return (
     <div className={`bubble ${isUser ? "user" : "bot"}`}>
       {tag && <span className="tag">{tag}</span>}
       <div>{message.content}</div>
-      {message.sources && message.sources.length > 0 && (
+      {showSources && message.sources && message.sources.length > 0 ? (
         <div className="sources">
+          <div style={{ marginBottom: 4, fontWeight: 600 }}>Why this answer</div>
           {message.sources.map((s) => (
             <div key={s.id}>• {s.content}</div>
           ))}
         </div>
-      )}
+      ) : null}
+      {message.chips && message.chips.length > 0 ? (
+        <div className="chat-chips">
+          {message.chips.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="chat-chip"
+              onClick={() => onChip(c.id)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

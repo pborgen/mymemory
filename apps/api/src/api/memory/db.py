@@ -149,6 +149,23 @@ async def ensure_memory_tables() -> None:
         "ON memory_entity_links (entity_id)"
     )
 
+    await _execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_reminders (
+          id         UUID PRIMARY KEY,
+          email      TEXT NOT NULL REFERENCES profiles(email),
+          content    TEXT NOT NULL,
+          due_at     TIMESTAMPTZ,
+          done_at    TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT now()
+        )
+        """
+    )
+    await _execute(
+        "CREATE INDEX IF NOT EXISTS idx_memory_reminders_email "
+        "ON memory_reminders (email, created_at DESC)"
+    )
+
 
 def _memory_row(r: asyncpg.Record, *, include_similarity: bool = False) -> dict:
     out = {
@@ -537,6 +554,143 @@ async def delete_memory(email: str, id: str) -> bool:
         """,
         email,
         id,
+    )
+    return result.endswith(" 1")
+
+
+async def latest_memory(email: str) -> dict | None:
+    """Most recently created non-deleted memory for this user, or None."""
+    row = await _fetchrow(
+        f"""
+        SELECT {_MEMORY_COLS}
+        FROM memories
+        WHERE email = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        email,
+    )
+    return _memory_row(row) if row else None
+
+
+async def update_memory_content(
+    email: str,
+    memory_id: str,
+    content: str,
+    embedding: list[float],
+) -> dict | None:
+    """Replace content + embedding for a live memory; return the updated row."""
+    row = await _fetchrow(
+        f"""
+        UPDATE memories
+           SET content = $3,
+               embedding = $4::vector
+         WHERE email = $1 AND id = $2 AND deleted_at IS NULL
+     RETURNING {_MEMORY_COLS}
+        """,
+        email,
+        memory_id,
+        content,
+        _vec_literal(embedding),
+    )
+    return _memory_row(row) if row else None
+
+
+async def soft_delete_all_memories(email: str) -> int:
+    """Soft-delete every live memory for this user. Returns rows affected."""
+    result = await _execute(
+        """
+        UPDATE memories
+           SET deleted_at = now()
+         WHERE email = $1 AND deleted_at IS NULL
+        """,
+        email,
+    )
+    # asyncpg: "UPDATE <n>"
+    try:
+        return int(result.split()[-1])
+    except (ValueError, IndexError):
+        return 0
+
+
+def _reminder_row(r: asyncpg.Record) -> dict:
+    return {
+        "id": str(r["id"]),
+        "content": r["content"],
+        "dueAt": r["due_at"],
+        "doneAt": r["done_at"],
+        "createdAt": r["created_at"],
+    }
+
+
+async def insert_reminder(
+    id: str,
+    email: str,
+    content: str,
+    *,
+    due_at=None,
+) -> dict:
+    row = await _fetchrow(
+        """
+        INSERT INTO memory_reminders (id, email, content, due_at)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, content, due_at, done_at, created_at
+        """,
+        id,
+        email,
+        content,
+        due_at,
+    )
+    return _reminder_row(row)
+
+
+async def list_reminders(email: str, *, include_done: bool = False) -> list[dict]:
+    if include_done:
+        rows = await _fetch(
+            """
+            SELECT id, content, due_at, done_at, created_at
+            FROM memory_reminders
+            WHERE email = $1
+            ORDER BY created_at DESC
+            LIMIT 100
+            """,
+            email,
+        )
+    else:
+        rows = await _fetch(
+            """
+            SELECT id, content, due_at, done_at, created_at
+            FROM memory_reminders
+            WHERE email = $1 AND done_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 100
+            """,
+            email,
+        )
+    return [_reminder_row(r) for r in rows]
+
+
+async def complete_reminder(email: str, reminder_id: str) -> bool:
+    result = await _execute(
+        """
+        UPDATE memory_reminders
+           SET done_at = now()
+         WHERE email = $1 AND id = $2 AND done_at IS NULL
+        """,
+        email,
+        reminder_id,
+    )
+    return result.endswith(" 1")
+
+
+async def delete_reminder(email: str, reminder_id: str) -> bool:
+    result = await _execute(
+        """
+        DELETE FROM memory_reminders
+         WHERE email = $1 AND id = $2
+        """,
+        email,
+        reminder_id,
     )
     return result.endswith(" 1")
 

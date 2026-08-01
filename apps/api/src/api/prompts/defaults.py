@@ -52,7 +52,7 @@ they can tell you facts to remember or ask you to recall them."""
 _MEMORY_CLASSIFIER = """You route messages for a personal memory assistant.
 
 Decide ONE action. Respond with ONLY a JSON object (no prose, no markdown):
-{"action": "store" | "recall" | "chat", "fact": "<string>"}
+{"action": "store" | "recall" | "chat" | "forget", "fact": "<string>"}
 
 ## store — ONLY durable personal facts worth saving long-term
 Examples: license plate, birthday, preferred name, address, loan number, rate lock,
@@ -70,6 +70,12 @@ If unsure whether it is a lasting fact → use "chat", not "store".
 ## recall — the user is asking for something they may have saved
 Examples: "what's my license plate?", "when is Jenna's birthday?"
 Set "fact" to "".
+
+## forget — undo the most recently stored memory
+Examples: "forget the last memory", "delete the last thing you stored",
+"undo what you just saved". Set "fact" to "".
+Do NOT use forget for "forget my wifi password" (content-specific delete —
+use recall for now).
 
 ## chat — everything else
 Greetings, thanks, how-you-work questions, empty chatter. Set "fact" to "".
@@ -141,7 +147,7 @@ DEFAULTS: list[dict] = [
     {
         "key": "memory.classifier",
         "name": "Memory Engine · Classifier",
-        "description": "API classifier: store durable facts, recall questions, or chat (skip memory).",
+        "description": "API classifier: store, recall, forget-last, or chat (skip memory).",
         "variables": [],
         "content": _MEMORY_CLASSIFIER,
     },

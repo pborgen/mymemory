@@ -82,6 +82,9 @@ async def ensure_tables() -> None:
     await _execute(
         "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'"
     )
+    await _execute(
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb"
+    )
 
 
 # ── Profile helpers ───────────────────────────────────────
@@ -109,8 +112,13 @@ async def ensure_google_user(email: str, full_name: str | None = None) -> None:
 
 
 async def get_profile(email: str) -> dict | None:
+    from .user_settings import merge_settings
+
     row = await _fetchrow(
-        "SELECT email, full_name, role, created_at FROM profiles WHERE email = $1",
+        """
+        SELECT email, full_name, role, created_at, settings
+        FROM profiles WHERE email = $1
+        """,
         email.lower(),
     )
     if not row:
@@ -120,7 +128,34 @@ async def get_profile(email: str) -> dict | None:
         "fullName": row["full_name"],
         "role": row["role"] or "user",
         "createdAt": row["created_at"],
+        "settings": merge_settings(row["settings"] if "settings" in row.keys() else None),
     }
+
+
+async def get_user_settings(email: str) -> dict:
+    from .user_settings import merge_settings
+
+    await ensure_profile(email)
+    row = await _fetchrow(
+        "SELECT settings FROM profiles WHERE email = $1",
+        email.lower(),
+    )
+    raw = row["settings"] if row else None
+    return merge_settings(raw)
+
+
+async def update_user_settings(email: str, updates: dict) -> dict:
+    from .user_settings import patch_settings
+
+    await ensure_profile(email)
+    current = await get_user_settings(email)
+    merged = patch_settings(current, updates)
+    await _execute(
+        "UPDATE profiles SET settings = $2::jsonb WHERE email = $1",
+        email.lower(),
+        merged,
+    )
+    return merged
 
 
 async def is_admin(email: str) -> bool:

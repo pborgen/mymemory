@@ -851,6 +851,82 @@ section.block { padding: 70px 0; border-top: 1px solid var(--border); }
   margin-top: 8px;
   opacity: 0.8;
 }
+.settings-wrap { padding: 28px 0 80px; max-width: 720px; }
+.settings-title {
+  font-family: var(--font-display, inherit);
+  font-size: 2rem;
+  margin: 0 0 8px;
+  color: var(--brand, var(--text));
+}
+.settings-lead { color: var(--text-dim); margin: 0 0 22px; line-height: 1.45; }
+.settings-status { color: var(--accent); font-size: 14px; margin-bottom: 16px; }
+.settings-group { margin-bottom: 28px; }
+.settings-group h2 {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+}
+.settings-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.settings-list li {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-name { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.settings-desc { color: var(--text-dim); font-size: 14px; line-height: 1.4; }
+.settings-toggle {
+  flex-shrink: 0;
+  min-width: 64px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.settings-textarea {
+  width: 100%;
+  margin: 10px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 12px 14px;
+  font: inherit;
+  resize: vertical;
+}
+.settings-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.settings-action {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 14px;
+}
+.settings-action.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.chat-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chat-chip {
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.chat-chip:hover { border-color: var(--accent); }
+
 .badge {
   display: inline-block;
   margin-left: 8px;

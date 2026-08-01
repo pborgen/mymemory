@@ -10,7 +10,7 @@ import { ThemePicker } from "./theme";
 export function AppBar({
   active,
 }: {
-  active: "chat" | "memories" | "prompts" | "users" | "metrics";
+  active: "chat" | "memories" | "settings" | "prompts" | "users" | "metrics";
 }) {
   const { signOut, isAdmin } = useAuth();
   return (
@@ -21,6 +21,7 @@ export function AppBar({
       <div className="links">
         {active !== "chat" && <Link href="/chat">Chat</Link>}
         {active !== "memories" && <Link href="/memories">Memories</Link>}
+        {active !== "settings" && <Link href="/settings">Settings</Link>}
         {isAdmin && active !== "prompts" && (
           <Link href="/admin/prompts">Prompts</Link>
         )}

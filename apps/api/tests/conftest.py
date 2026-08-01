@@ -71,11 +71,13 @@ _QUESTION_STARTS = (
 async def fake_classify_and_normalize(
     message: str, system: str | None = None, **_kwargs
 ) -> dict:
-    """Cheap store/recall/chat heuristic standing in for the classifier LLM."""
+    """Cheap store/recall/chat/forget heuristic standing in for the classifier LLM."""
     from api.memory import remember_gate as rg
 
     text = message.strip()
     lowered = text.lower()
+    if rg.is_forget_last(text):
+        return {"action": "forget", "fact": ""}
     if rg.is_obvious_chat(text):
         return {"action": "chat", "fact": ""}
     is_question = text.endswith("?") or lowered.split(" ", 1)[0] in _QUESTION_STARTS
@@ -153,6 +155,8 @@ async def client(monkeypatch):
     monkeypatch.setattr(config, "GOOGLE_CLIENT_IDS", [])
     monkeypatch.setattr(config, "GOOGLE_IOS_CLIENT_ID", "")
     monkeypatch.setattr(config, "SUPER_ADMIN_EMAIL", "")
+    # Never flush traces to Langfuse Cloud during tests (hangs / flakes).
+    monkeypatch.setattr(config, "LANGFUSE_ENABLED", False)
     # Fake embeddings are not semantic — disable similarity floor in tests.
     monkeypatch.setattr(config, "RETRIEVAL_MIN_SIMILARITY", 0.0)
 
@@ -160,9 +164,13 @@ async def client(monkeypatch):
     from api.memory import engine, retrieval
     from api.prompts import eval as prompt_eval
 
+    async def fake_link_entities(*_a, **_k):
+        return []
+
     monkeypatch.setattr(engine, "embed", fake_embed)
     monkeypatch.setattr(engine, "classify_and_normalize", fake_classify_and_normalize)
     monkeypatch.setattr(engine, "generate_answer", fake_generate_answer)
+    monkeypatch.setattr(engine, "link_entities_for_memory", fake_link_entities)
     monkeypatch.setattr(retrieval, "embed", fake_embed)
     # Prompt eval imports the same LLM helpers — keep those offline too.
     monkeypatch.setattr(prompt_eval, "classify_and_normalize", fake_classify_and_normalize)
@@ -188,6 +196,7 @@ async def _wipe_test_rows(db_module) -> None:
     await pool.execute("DELETE FROM chat_metrics WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM memory_audit_log WHERE email LIKE $1", like)
     await pool.execute("DELETE FROM memory_chat_history WHERE email LIKE $1", like)
+    await pool.execute("DELETE FROM memory_reminders WHERE email LIKE $1", like)
     # memories → cascades memory_entity_links via memory_id
     await pool.execute("DELETE FROM memories WHERE email LIKE $1", like)
     # entities → cascades remaining links; must go before profiles

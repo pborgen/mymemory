@@ -22,6 +22,8 @@ def _fake_llm(monkeypatch):
         # A deliberately broken candidate prompt is detected via a marker string.
         if system and "BREAK_CLASSIFIER" in system:
             return {"action": "store", "fact": "broken"}
+        if rg.is_forget_last(text):
+            return {"action": "forget", "fact": ""}
         if rg.is_obvious_chat(text):
             return {"action": "chat", "fact": ""}
         if is_q:

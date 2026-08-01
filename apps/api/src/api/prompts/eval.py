@@ -79,6 +79,16 @@ CLASSIFIER_CASES: list[dict[str, Any]] = [
         "message": "thanks!",
         "expect_action": "chat",
     },
+    {
+        "id": "forget-last",
+        "message": "Forget the last memory you stored",
+        "expect_action": "forget",
+    },
+    {
+        "id": "forget-undo",
+        "message": "undo the last thing you saved",
+        "expect_action": "forget",
+    },
 ]
 
 ANSWER_CASES: list[dict[str, Any]] = [

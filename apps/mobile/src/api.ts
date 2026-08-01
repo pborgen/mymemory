@@ -8,6 +8,9 @@ import type {
   Memory,
   Prompt,
   PromptVersion,
+  Reminder,
+  SettingsResponse,
+  UserSettings,
 } from "./types";
 
 export const AUTH_KEY = "mymemory_auth_v1";
@@ -119,6 +122,30 @@ export const createMemory = (content: string) =>
   apiFetch<{ ok: boolean; memory: Memory }>("POST", "/api/memory", { content });
 export const deleteMemory = (id: string) =>
   apiFetch<{ ok: boolean }>("DELETE", `/api/memory/${id}`);
+
+export const fetchSettings = () =>
+  apiFetch<SettingsResponse>("GET", "/api/settings");
+
+export const updateSettings = (settings: Partial<UserSettings>) =>
+  apiFetch<SettingsResponse>("PATCH", "/api/settings", { settings });
+
+export const pasteInbox = (text: string) =>
+  apiFetch<{ ok: boolean; count: number }>("POST", "/api/settings/paste-inbox", {
+    text,
+  });
+
+export const importMemoriesText = (text: string) =>
+  apiFetch<{ ok: boolean; count: number }>("POST", "/api/settings/import", {
+    text,
+  });
+
+export const deleteAllMemories = () =>
+  apiFetch<{ ok: boolean; deleted: number }>("DELETE", "/api/settings/memories");
+
+export const fetchReminders = () => apiFetch<Reminder[]>("GET", "/api/reminders");
+
+export const markReminderDone = (id: string) =>
+  apiFetch<{ ok: boolean }>("POST", `/api/reminders/${id}/done`);
 
 // Managed prompts
 export const fetchPrompts = () => apiFetch<Prompt[]>("GET", "/api/prompts");

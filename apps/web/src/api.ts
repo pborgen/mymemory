@@ -12,6 +12,9 @@ import type {
   Prompt,
   PromptEvalReport,
   PromptVersion,
+  Reminder,
+  SettingsResponse,
+  UserSettings,
 } from "./types";
 
 export const AUTH_KEY = "mymemory_auth_v1";
@@ -186,6 +189,34 @@ export const submitChatFeedback = (
     rating,
     comment,
   });
+
+export const fetchSettings = () =>
+  apiFetch<SettingsResponse>("GET", "/api/settings");
+
+export const updateSettings = (settings: Partial<UserSettings>) =>
+  apiFetch<SettingsResponse>("PATCH", "/api/settings", { settings });
+
+export const pasteInbox = (text: string) =>
+  apiFetch<{ ok: boolean; count: number }>("POST", "/api/settings/paste-inbox", {
+    text,
+  });
+
+export const exportMemoriesJson = () =>
+  apiFetch<{ count: number; memories: Memory[] }>("GET", "/api/settings/export");
+
+export const importMemoriesText = (text: string) =>
+  apiFetch<{ ok: boolean; count: number }>("POST", "/api/settings/import", {
+    text,
+  });
+
+export const deleteAllMemories = () =>
+  apiFetch<{ ok: boolean; deleted: number }>("DELETE", "/api/settings/memories");
+
+export const fetchReminders = () =>
+  apiFetch<Reminder[]>("GET", "/api/reminders");
+
+export const markReminderDone = (id: string) =>
+  apiFetch<{ ok: boolean }>("POST", `/api/reminders/${id}/done`);
 
 // Auth config + Google credential exchange
 export const fetchAuthConfig = (): Promise<{ googleClientId: string | null }> =>
