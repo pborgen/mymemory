@@ -908,9 +908,10 @@ async def _update_matching_memory(
         flags=re.I,
     ).strip() or message.strip()
     hits = await retrieve_relevant_memories(
-        email, new_fact, top_k=3, min_similarity=0.2
+        email, new_fact, top_k=3, min_similarity=0.0
     )
-    if not hits:
+    old = hits[0] if hits else await _match_topic_memory(email, new_fact)
+    if not old:
         # Nothing to update — fall through to a normal store.
         stored = await store_fact(email, new_fact, "chat")
         answer = f"Got it — I'll remember that: {stored['content']}"
@@ -929,8 +930,6 @@ async def _update_matching_memory(
             memory_ids=[stored["id"]],
         )
         return _with_chips(result, settings, action="stored")
-
-    old = hits[0]
     embedding = await embed(new_fact)
     updated = await db.update_memory_content(
         email, str(old["id"]), new_fact, embedding

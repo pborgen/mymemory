@@ -68,8 +68,21 @@ def test_resolve_route_forget_beats_question():
 def test_forget_topic_and_edit_and_remind():
     assert rg.forget_topic_query("Forget my wifi password") == "wifi password"
     assert rg.is_edit_correct("Actually my plate is 8XYZ456")
+    assert rg.is_edit_correct("Change my wifi password to hunter3")
+    assert not rg.is_edit_correct("hi")
     assert rg.reminder_content("remind me to call Jenna") == "call Jenna"
+    assert rg.reminder_content("remind me: pick up dry cleaning") == (
+        "pick up dry cleaning"
+    )
     assert rg.resolve_route(
         "Forget my wifi password",
         {"action": "chat", "fact": ""},
     )["action"] == "forget_topic"
+    assert rg.resolve_route(
+        "Actually my plate is 8XYZ456",
+        {"action": "store", "fact": "My plate is 8XYZ456"},
+    )["action"] == "update"
+    assert rg.resolve_route(
+        "remind me to call Jenna",
+        {"action": "chat", "fact": ""},
+    )["action"] == "remind"
